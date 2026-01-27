@@ -111,12 +111,8 @@ dependencies = [
     { name = "imageio-ffmpeg" },
     { name = "numpy" },
     { name = "openai" },
-    { name = "soundfile" },
-]
-
-[package.optional-dependencies]
-vad = [
     { name = "silero-vad" },
+    { name = "soundfile" },
 ]
 
 [package.dev-dependencies]
@@ -131,10 +127,9 @@ requires-dist = [
     { name = "imageio-ffmpeg" },
     { name = "numpy" },
     { name = "openai" },
-    { name = "silero-vad", marker = "extra == 'vad'" },
+    { name = "silero-vad" },
     { name = "soundfile" },
 ]
-provides-extras = ["vad"]
 
 [package.metadata.requires-dev]
 dev = [

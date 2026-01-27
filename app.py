@@ -221,7 +221,7 @@ with gr.Blocks(title="auto-asr（OpenAI 转字幕）", theme=gr.themes.Ocean()) 
                 "- 若上游不返回 segments（无时间戳），可用 VAD 语音段模式生成更准的字幕轴。",
                 "- 语音段模式会增加调用次数（按语音段逐段转写）。",
                 "- 部分上游对音频文件大小有限制，建议上传格式选 MP3 压缩。",
-                "- 如需真正的 VAD（Silero），安装：`uv sync --extra vad`（体积大，会拉 PyTorch）。",
+                "- 本项目默认依赖 Silero VAD（首次安装体积较大，可能会拉 PyTorch/ONNXRuntime）。",
             ]
         )
     )

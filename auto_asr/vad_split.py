@@ -37,8 +37,8 @@ def get_vad_model() -> object | None:
     if _VAD_MODEL is not None:
         return _VAD_MODEL
 
-    # Optional dependency: silero_vad pulls in torch (heavy).
-    # If it's not installed, we silently fall back to fixed chunking.
+    # silero_vad pulls in heavy deps (PyTorch/ONNXRuntime). If it fails to load at runtime,
+    # we fall back to fixed chunking to keep the app usable.
     try:
         from silero_vad import load_silero_vad  # type: ignore
 
@@ -46,7 +46,7 @@ def get_vad_model() -> object | None:
         _VAD_MODEL = load_silero_vad(onnx=True)
         logger.info("Silero VAD 模型加载完成。")
     except Exception as e:
-        logger.info("未安装/无法加载 silero_vad，将使用固定分段切分。原因: %s", e)
+        logger.info("无法加载 silero_vad，将使用固定分段切分。原因: %s", e)
         _VAD_MODEL = None
     return _VAD_MODEL
 

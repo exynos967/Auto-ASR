@@ -28,10 +28,6 @@ Then open the printed local URL.
 ## Notes
 
 - `imageio-ffmpeg` is used to provide an `ffmpeg` binary (no system `ffmpeg` required).
-- Optional: install `silero_vad` if you want true VAD-based splitting (it pulls in PyTorch and is large):
-
-  ```bash
-  uv sync --extra vad
-  ```
+- `silero_vad` is installed by default (it may pull in PyTorch/ONNXRuntime and is large; first install can be slow).
 
 - Output files are written to `./outputs/`.

@@ -3,6 +3,7 @@ openai
 numpy
 soundfile
 imageio-ffmpeg
+silero_vad
 
 ruff
 pytest

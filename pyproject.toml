@@ -10,10 +10,8 @@ dependencies = [
     "numpy",
     "soundfile",
     "imageio-ffmpeg",
+    "silero_vad",
 ]
-
-[project.optional-dependencies]
-vad = ["silero_vad"]
 
 [dependency-groups]
 dev = ["ruff", "pytest"]
