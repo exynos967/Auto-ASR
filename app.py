@@ -209,7 +209,10 @@ def clear_settings():
     )
 
 
-with gr.Blocks(title="auto-asr（OpenAI 转字幕）", theme=gr.themes.Ocean()) as demo:
+with gr.Blocks(
+    title="auto-asr（OpenAI 转字幕）",
+    theme=gr.themes.Base(primary_hue=gr.themes.utils.colors.blue),
+) as demo:
     gr.Markdown(
         "\n".join(
             [
