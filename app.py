@@ -210,21 +210,19 @@ def clear_settings():
 
 
 with gr.Blocks(
-    title="auto-asr（OpenAI 转字幕）",
+    title="Auto-ASR",
     theme=gr.themes.Base(primary_hue=gr.themes.utils.colors.blue),
 ) as demo:
     gr.Markdown(
         "\n".join(
             [
-                "# auto-asr 音频转字幕",
+                "# Auto-ASR",
                 "上传/录制音频 -> OpenAI ASR -> 导出 SRT / VTT / TXT。",
                 "",
-                "- API 配置在页面中填写，不依赖环境变量。",
-                "- 长音频自动切分：内置切分算法（源自 Qwen3-ASR-Toolkit，MIT）。",
                 "- 若上游不返回 segments（无时间戳），可用 VAD 语音段模式生成更准的字幕轴。",
                 "- 语音段模式会增加调用次数（按语音段逐段转写）。",
                 "- 部分上游对音频文件大小有限制，建议上传格式选 MP3 压缩。",
-                "- 本项目默认依赖 Silero VAD（首次安装体积较大，可能会拉 PyTorch/ONNXRuntime）。",
+                "- 本项目默认依赖 Silero VAD（首次安装体积较大，会拉取 PyTorch/ONNXRuntime）。",
             ]
         )
     )
@@ -237,7 +235,7 @@ with gr.Blocks(
             value=DEFAULT_OPENAI_API_KEY,
         )
         openai_base_url = gr.Textbox(
-            label="Base URL（可选）",
+            label="Base URL",
             placeholder="例如：https://api.openai.com/v1",
             value=DEFAULT_OPENAI_BASE_URL,
         )
