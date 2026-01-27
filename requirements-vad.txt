@@ -1,0 +1,2 @@
+# Optional (large): enables Silero VAD based splitting for long audio.
+silero_vad

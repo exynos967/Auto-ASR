@@ -1,0 +1,30 @@
+[project]
+name = "auto-asr"
+version = "0.1.0"
+description = "Gradio UI for OpenAI ASR -> SRT/VTT/TXT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "gradio",
+    "openai",
+    "numpy",
+    "soundfile",
+    "imageio-ffmpeg",
+]
+
+[project.optional-dependencies]
+vad = ["silero_vad"]
+
+[dependency-groups]
+dev = ["ruff", "pytest"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
+ignore = ["RUF001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

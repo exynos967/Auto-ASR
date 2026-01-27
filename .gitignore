@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+outputs/
+*.wav
+*.mp3
+*.m4a
+*.webm
+*.mp4
+*.log
+.env

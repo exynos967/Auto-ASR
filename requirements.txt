@@ -1,0 +1,8 @@
+gradio
+openai
+numpy
+soundfile
+imageio-ffmpeg
+
+ruff
+pytest
