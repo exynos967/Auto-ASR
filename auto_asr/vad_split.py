@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 import numpy as np
@@ -28,6 +29,8 @@ class AudioChunk:
 
 _VAD_MODEL: object | None = None
 
+logger = logging.getLogger(__name__)
+
 
 def get_vad_model() -> object | None:
     global _VAD_MODEL
@@ -39,8 +42,11 @@ def get_vad_model() -> object | None:
     try:
         from silero_vad import load_silero_vad  # type: ignore
 
+        logger.info("加载 Silero VAD 模型中（onnx=True）...")
         _VAD_MODEL = load_silero_vad(onnx=True)
+        logger.info("Silero VAD 模型加载完成。")
     except Exception:
+        logger.info("未安装/无法加载 silero_vad，将使用固定分段切分。")
         _VAD_MODEL = None
     return _VAD_MODEL
 
@@ -56,17 +62,26 @@ def load_and_split(
     wav = load_audio(file_path)
 
     duration_s = len(wav) / float(WAV_SAMPLE_RATE)
+    logger.info(
+        "切分参数: enable_vad=%s, duration=%.2fs, min_duration=%ds, target=%ds, max=%ds",
+        enable_vad,
+        duration_s,
+        vad_min_duration_s,
+        vad_segment_threshold_s,
+        vad_max_segment_threshold_s,
+    )
     if not enable_vad or duration_s < vad_min_duration_s:
+        logger.info("不进行切分（或音频较短），直接整段转写。")
         return [AudioChunk(start_sample=0, end_sample=len(wav), wav=wav)], False
 
     vad_model = get_vad_model()
-    parts = process_vad(
+    parts, used_vad = process_vad(
         wav,
         vad_model,
         segment_threshold_s=vad_segment_threshold_s,
         max_segment_threshold_s=vad_max_segment_threshold_s,
     )
-    used_vad = vad_model is not None
+    logger.info("切分完成: chunks=%d, used_vad=%s", len(parts), used_vad)
     return [AudioChunk(start_sample=s, end_sample=e, wav=w) for (s, e, w) in parts], used_vad
 
 

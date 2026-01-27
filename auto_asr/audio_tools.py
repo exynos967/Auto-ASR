@@ -8,6 +8,7 @@ See `THIRD_PARTY_NOTICES.md` for license details.
 from __future__ import annotations
 
 import io
+import logging
 import os
 import subprocess
 
@@ -27,6 +28,8 @@ except Exception:  # pragma: no cover
 
 WAV_SAMPLE_RATE = 16000
 
+logger = logging.getLogger(__name__)
+
 
 def _ffmpeg_bin() -> str:
     if get_ffmpeg_exe is None:
@@ -40,6 +43,8 @@ def _ffmpeg_bin() -> str:
 def load_audio(file_path: str) -> np.ndarray:
     if file_path.startswith(("http://", "https://")):
         raise ValueError("暂不支持远程 URL，请先下载到本地文件。")
+
+    logger.info("读取音频: %s", file_path)
 
     command = [
         _ffmpeg_bin(),
@@ -75,6 +80,13 @@ def load_audio(file_path: str) -> np.ndarray:
 
     if wav_data.ndim == 2:
         wav_data = wav_data.mean(axis=1)
+
+    logger.info(
+        "音频已解码: samples=%d, sr=%d, duration=%.2fs",
+        len(wav_data),
+        WAV_SAMPLE_RATE,
+        len(wav_data) / float(WAV_SAMPLE_RATE),
+    )
     return wav_data
 
 
@@ -83,7 +95,7 @@ def process_vad(
     worker_vad_model: object | None,
     segment_threshold_s: int = 120,
     max_segment_threshold_s: int = 180,
-) -> list[tuple[int, int, np.ndarray]]:
+) -> tuple[list[tuple[int, int, np.ndarray]], bool]:
     """
     Segment long audio using Silero VAD timestamps when available, otherwise fall back
     to fixed-size chunking.
@@ -142,9 +154,10 @@ def process_vad(
             start_sample = int(split_points[i])
             end_sample = int(split_points[i + 1])
             segmented_wavs.append((start_sample, end_sample, wav[start_sample:end_sample]))
-        return segmented_wavs
+        return segmented_wavs, True
 
-    except Exception:
+    except Exception as e:
+        logger.info("VAD 分段失败，降级为固定分段: %s", e)
         segmented_wavs: list[tuple[int, int, np.ndarray]] = []
         total_samples = len(wav)
         max_chunk_size_samples = int(max_segment_threshold_s) * WAV_SAMPLE_RATE
@@ -154,7 +167,7 @@ def process_vad(
             segment = wav[start_sample:end_sample]
             if len(segment) > 0:
                 segmented_wavs.append((start_sample, end_sample, segment))
-        return segmented_wavs
+        return segmented_wavs, False
 
 
 def save_audio_file(wav: np.ndarray, file_path: str) -> None:

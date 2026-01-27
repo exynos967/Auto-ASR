@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -9,6 +10,8 @@ from tempfile import TemporaryDirectory
 from auto_asr.openai_asr import make_openai_client, transcribe_file_verbose
 from auto_asr.subtitles import SubtitleLine, compose_srt, compose_txt, compose_vtt
 from auto_asr.vad_split import WAV_SAMPLE_RATE, load_and_split, save_audio_file
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,15 @@ def transcribe_to_subtitles(
     if output_format not in {"srt", "vtt", "txt"}:
         raise ValueError("output_format must be one of: srt, vtt, txt")
 
+    logger.info(
+        "开始转写: file=%s, format=%s, model=%s, language=%s, vad=%s",
+        input_audio_path,
+        output_format,
+        model,
+        language or "auto",
+        enable_vad,
+    )
+
     client = make_openai_client(api_key=openai_api_key, base_url=openai_base_url)
 
     chunks, used_vad = load_and_split(
@@ -60,8 +72,18 @@ def transcribe_to_subtitles(
     full_text_parts: list[str] = []
     total_segments = 0
 
+    logger.info("分段信息: chunks=%d, used_vad=%s", len(chunks), used_vad)
+
     with TemporaryDirectory(prefix="auto-asr-") as tmp_dir:
         for idx, chunk in enumerate(chunks):
+            logger.info(
+                "处理分段 %d/%d: start=%.2fs end=%.2fs duration=%.2fs",
+                idx + 1,
+                len(chunks),
+                chunk.start_s,
+                chunk.end_s,
+                chunk.duration_s,
+            )
             chunk_path = os.path.join(tmp_dir, f"chunk_{idx:04d}.wav")
             save_audio_file(chunk.wav, chunk_path)
 
@@ -86,6 +108,13 @@ def transcribe_to_subtitles(
                         )
                     )
                 total_segments += len(asr.segments)
+                logger.info(
+                    "分段 %d/%d 完成: segments=%d, text_len=%d",
+                    idx + 1,
+                    len(chunks),
+                    len(asr.segments),
+                    len(asr.text or ""),
+                )
             else:
                 # Fallback: coarse chunk-level subtitle.
                 subtitle_lines.append(
@@ -96,6 +125,12 @@ def transcribe_to_subtitles(
                     )
                 )
                 total_segments += 1
+                logger.info(
+                    "分段 %d/%d 完成: segments=0(降级为整段), text_len=%d",
+                    idx + 1,
+                    len(chunks),
+                    len(asr.text or ""),
+                )
 
     subtitle_lines.sort(key=lambda x: (x.start_s, x.end_s))
 
@@ -121,6 +156,13 @@ def transcribe_to_subtitles(
         f"vad={'on' if enable_vad else 'off'}(used={used_vad}), "
         f"vad_segment_threshold_s={vad_segment_threshold_s}, "
         f"vad_max_segment_threshold_s={vad_max_segment_threshold_s}"
+    )
+    logger.info(
+        "转写完成: out=%s, chunks=%d, segments=%d, used_vad=%s",
+        out_path,
+        len(chunks),
+        total_segments,
+        used_vad,
     )
     return PipelineResult(
         preview_text=preview,

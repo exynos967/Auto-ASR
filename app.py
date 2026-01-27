@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+import logging
+
 import gradio as gr
 
 from auto_asr.config import delete_config, get_config_path, load_config, save_config
 from auto_asr.pipeline import transcribe_to_subtitles
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 _SAVED_CONFIG = load_config()
 _CONFIG_PATH = get_config_path()
@@ -47,6 +55,13 @@ INITIAL_CONFIG_STATUS = (
     + ("（已加载）" if _CONFIG_PATH.exists() else "（尚未保存）")
 )
 
+logger.info(
+    "auto-asr 启动: config=%s, exists=%s, api_key_saved=%s",
+    _CONFIG_PATH,
+    _CONFIG_PATH.exists(),
+    bool(DEFAULT_OPENAI_API_KEY),
+)
+
 def run_asr(
     audio_path: str | None,
     openai_api_key: str,
@@ -68,6 +83,19 @@ def run_asr(
     prompt = (prompt or "").strip() or None
     model = (model or "").strip() or "whisper-1"
     base_url = (openai_base_url or "").strip() or None
+
+    logger.info(
+        "收到转写请求: file=%s, format=%s, language=%s, model=%s, base_url=%s, "
+        "enable_vad=%s, target=%ss, max=%ss",
+        audio_path,
+        output_format,
+        lang or "auto",
+        model,
+        base_url or "(default)",
+        enable_vad,
+        vad_segment_threshold_s,
+        vad_max_segment_threshold_s,
+    )
 
     try:
         result = transcribe_to_subtitles(
@@ -114,11 +142,13 @@ def save_settings(
         config["openai_api_key"] = ""
 
     path = save_config(config)
+    logger.info("配置已保存: path=%s, remember_api_key=%s", path, remember_api_key)
     return f"已保存配置到 `{path}`。下次启动会自动加载。"
 
 
 def clear_settings():
     deleted = delete_config()
+    logger.info("配置已清除: deleted=%s", deleted)
     msg = "已清除已保存配置。" if deleted else "未找到已保存配置。"
     return (
         "",
