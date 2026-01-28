@@ -50,8 +50,17 @@ def _maybe_postprocess_text(text: str) -> str:
 
 
 def _filter_kwargs(func: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Best-effort filter kwargs against a callable signature.
+
+    FunASR's `AutoModel` frequently accepts arbitrary `**kwargs` (its signature may only expose a
+    VAR_KEYWORD parameter). In that case, filtering by explicit parameter names would incorrectly
+    drop required keys like `model`, causing runtime assertions.
+    """
+
     try:
         sig = inspect.signature(func)
+        if any(p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+            return kwargs
         return {k: v for k, v in kwargs.items() if k in sig.parameters}
     except Exception:  # pragma: no cover
         return kwargs
@@ -64,6 +73,7 @@ def _make_model(cfg: FunASRConfig) -> Any:
     We keep it best-effort and rely on runtime feature detection, since different models expose
     different knobs.
     """
+
     key = (cfg.model, cfg.device, bool(cfg.enable_vad), bool(cfg.enable_punc))
     if key in _MODEL_CACHE:
         return _MODEL_CACHE[key]
@@ -75,6 +85,8 @@ def _make_model(cfg: FunASRConfig) -> Any:
         "device": cfg.device,
         # Some models (e.g. SenseVoiceSmall) require remote code to enable full features.
         "trust_remote_code": True,
+        # FunASR 会在初始化时做版本更新检查 (可能较慢), 这里默认禁用。
+        "disable_update": True,
     }
 
     # Try to enable built-in VAD / punctuation when requested. These are common in FunASR.
@@ -242,6 +254,7 @@ def download_funasr_model(
     FunASR/AutoModel internally decides where to cache model files (e.g. HuggingFace / ModelScope
     cache).
     """
+
     model = (model or "").strip()
     if not model:
         raise RuntimeError("请先选择 FunASR 本地模型。")
@@ -251,6 +264,8 @@ def download_funasr_model(
         "model": model,
         "device": "cpu",
         "trust_remote_code": True,
+        # FunASR 会在初始化时做版本更新检查 (可能较慢), 这里默认禁用。
+        "disable_update": True,
     }
     if enable_vad:
         model_kwargs["vad_model"] = "fsmn-vad"

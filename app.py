@@ -472,8 +472,7 @@ with gr.Blocks(
 
         with gr.Tab("引擎配置", id="tab_engine"):
             gr.Markdown(CUDA_NOTE)
-            with gr.Group(visible=DEFAULT_ASR_BACKEND == "openai") as openai_group:
-                gr.Markdown("## OpenAI 配置")
+            with gr.Accordion("OpenAI 配置", open=True):
                 openai_api_key = gr.Textbox(
                     label="OpenAI API Key（会明文保存在本机配置文件里）",
                     type="password",
@@ -490,8 +489,7 @@ with gr.Blocks(
                     value=DEFAULT_MODEL,
                 )
 
-            with gr.Group(visible=DEFAULT_ASR_BACKEND == "funasr") as funasr_group:
-                gr.Markdown("## FunASR 本地推理")
+            with gr.Accordion("FunASR 本地推理", open=False):
                 gr.Markdown("首次使用需安装：`uv sync --extra funasr`")
                 funasr_model = gr.Dropdown(
                     choices=[
@@ -640,16 +638,6 @@ with gr.Blocks(
                     step=1,
                     label="并发请求数（仅 VAD 语音段模式生效）",
                 )
-
-    def _toggle_asr_backend(backend: str):
-        backend = (backend or "").strip()
-        return gr.update(visible=backend == "openai"), gr.update(visible=backend == "funasr")
-
-    asr_backend.change(
-        fn=_toggle_asr_backend,
-        inputs=[asr_backend],
-        outputs=[openai_group, funasr_group],
-    )
 
     download_model_btn.click(
         fn=download_funasr_model_ui,
