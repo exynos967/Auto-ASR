@@ -22,7 +22,7 @@ uv sync --extra funasr
 ```
 
 Windows + Python 3.12 可能会遇到 `llvmlite/numba` 依赖不兼容导致安装失败（例如报错 *Cannot install on Python version 3.12*）。
-建议改用 Python 3.11（或 3.10）创建环境后再安装：
+建议改用 Python 3.11（或 3.10）创建环境后再安装（本项目已将 `numpy` 约束到 `numpy<2.2`，以避免 `numba` 选择到不兼容版本）：
 
 ```bash
 # 安装/使用指定 Python 版本（示例：3.11）

@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 dependencies = [
     "gradio",
     "openai",
-    "numpy",
+    "numpy<2.2",
     "soundfile",
     "imageio-ffmpeg",
     "silero_vad",
