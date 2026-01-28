@@ -35,6 +35,21 @@ def _needs_trust_remote_code(model: str) -> bool:
     return "sensevoice" in m
 
 
+def _is_not_registered_error(exc: BaseException) -> bool:
+    msg = str(exc)
+    return "is not registered" in msg or "not registered" in msg
+
+
+def _raise_if_missing_tokenizers_deps(exc: BaseException) -> None:
+    # FunASR 1.3.1 has a known failure mode when `transformers` is missing: it raises
+    # UnboundLocalError about `AutoTokenizer` not being associated with a value.
+    if "AutoTokenizer" in str(exc):
+        raise RuntimeError(
+            "FunASR 依赖缺失: 似乎未安装 transformers/sentencepiece. "
+            "请执行 `uv sync --extra funasr` 重新安装依赖。"
+        ) from exc
+
+
 def _import_funasr() -> Any:
     try:
         from funasr import AutoModel  # type: ignore
@@ -111,14 +126,19 @@ def _make_model(cfg: FunASRConfig) -> Any:
     try:
         model = AutoModel(**_filter_kwargs(AutoModel, model_kwargs))
     except Exception as e:
-        # FunASR 1.3.1 has a known failure mode when `transformers` is missing: it raises
-        # UnboundLocalError about `AutoTokenizer` not being associated with a value.
-        if "AutoTokenizer" in str(e):
-            raise RuntimeError(
-                "FunASR 依赖缺失: 似乎未安装 transformers/sentencepiece. "
-                "请执行 `uv sync --extra funasr` 重新安装依赖。"
-            ) from e
-        raise
+        _raise_if_missing_tokenizers_deps(e)
+        if (not trust_remote_code) and _is_not_registered_error(e):
+            logger.warning(
+                "FunASR 模型未注册，尝试启用 trust_remote_code 重试: model=%s", cfg.model
+            )
+            model_kwargs["trust_remote_code"] = True
+            try:
+                model = AutoModel(**_filter_kwargs(AutoModel, model_kwargs))
+            except Exception as e2:
+                _raise_if_missing_tokenizers_deps(e2)
+                raise
+        else:
+            raise
     _MODEL_CACHE[key] = model
     logger.info("FunASR 模型已加载: model=%s, device=%s, vad=%s, punc=%s", *key)
     return model
@@ -299,12 +319,17 @@ def download_funasr_model(
     try:
         _ = AutoModel(**_filter_kwargs(AutoModel, model_kwargs))
     except Exception as e:
-        if "AutoTokenizer" in str(e):
-            raise RuntimeError(
-                "FunASR 依赖缺失: 似乎未安装 transformers/sentencepiece. "
-                "请执行 `uv sync --extra funasr` 重新安装依赖。"
-            ) from e
-        raise
+        _raise_if_missing_tokenizers_deps(e)
+        if (not trust_remote_code) and _is_not_registered_error(e):
+            logger.warning("FunASR 模型未注册，尝试启用 trust_remote_code 重试: model=%s", model)
+            model_kwargs["trust_remote_code"] = True
+            try:
+                _ = AutoModel(**_filter_kwargs(AutoModel, model_kwargs))
+            except Exception as e2:
+                _raise_if_missing_tokenizers_deps(e2)
+                raise
+        else:
+            raise
     logger.info(
         "FunASR 模型已下载/初始化(未缓存到进程内): model=%s, vad=%s, punc=%s",
         model,
