@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -65,14 +66,31 @@ def _maybe_postprocess_text(text: str) -> str:
     text = (text or "").strip()
     if not text:
         return ""
+
+    # SenseVoice 系列模型可能会输出 rich transcription 标签, 例如:
+    # "< | ja | > < | EMO _ UNKNOWN | > < | S pee ch | > < | withi tn | >"
+    # 我们先把这些带空格的标签规整成 "<|...|>", 再尝试使用官方后处理移除它们。
+    def _normalize_rich_tags(s: str) -> str:
+        def _repl(m: re.Match[str]) -> str:
+            inner = re.sub(r"\\s+", "", m.group(1))
+            return f"<|{inner}|>"
+
+        return re.sub(r"<\\s*\\|\\s*([^|<>]+?)\\s*\\|\\s*>", _repl, s)
+
+    text = _normalize_rich_tags(text)
     try:
         from funasr.utils.postprocess_utils import (  # type: ignore
             rich_transcription_postprocess,
         )
 
-        return rich_transcription_postprocess(text).strip()
+        text = rich_transcription_postprocess(text).strip()
     except Exception:
-        return text
+        pass
+
+    # Best-effort: strip remaining tags if upstream postprocess didn't remove them,
+    # or when importing the postprocess helper failed.
+    text = re.sub(r"<\\|[^|<>]+?\\|>", "", text)
+    return re.sub(r"\\s{2,}", " ", text).strip()
 
 
 def _filter_kwargs(func: Any, kwargs: dict[str, Any]) -> dict[str, Any]:
