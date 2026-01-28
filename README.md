@@ -21,6 +21,16 @@ uv sync
 uv sync --extra funasr
 ```
 
+FunASR 本地模型（HuggingFace）：
+
+- SenseVoiceSmall: `https://huggingface.co/iic/SenseVoiceSmall`
+- Fun-ASR-Nano-2512: `https://huggingface.co/FunAudioLLM/Fun-ASR-Nano-2512`
+
+模型存放位置：
+
+- 默认会自动下载到 HuggingFace 缓存目录（常见位置：Linux/macOS `~/.cache/huggingface/hub`；Windows `%USERPROFILE%\\.cache\\huggingface\\hub`）。
+- 也可以手动下载到项目目录下的 `./models/`（或任意目录），然后在 WebUI 的「引擎配置 -> FunASR -> 本地模型」里填写该目录路径（支持自定义值）。
+
 Windows + Python 3.12 可能会遇到 `llvmlite/numba` 依赖不兼容导致安装失败（例如报错 *Cannot install on Python version 3.12*）。
 建议改用 Python 3.11（或 3.10）创建环境后再安装（本项目已将 `numpy` 约束到 `numpy<2.2`，以避免 `numba` 选择到不兼容版本）：
 
@@ -33,8 +43,15 @@ uv sync --extra funasr -p 3.11
 如需使用 NVIDIA 显卡（CUDA）加速本地推理，可额外安装 CUDA 版 PyTorch（示例：CUDA 12.1；按你的驱动/CUDA 版本选择对应的 cuXXX）：
 
 ```bash
-# 示例：安装 CUDA 12.1 版 torch（含 torchaudio）
-uv pip install --upgrade --index-url https://download.pytorch.org/whl/cu121 torch torchaudio
+# 推荐：用 uv 的 PyTorch 后端选择（避免手动拼 index-url）
+uv pip install --upgrade --torch-backend cu121 torch torchaudio
+```
+
+如果你使用 `cu130` 这类 index-url 发现 “没有更改包”，通常是因为 PyTorch/uv 当前并没有对应的 cu130 轮子，或你已安装了同版本的 torch/torchaudio。
+可用下面命令检查当前 torch 是否真正在用 CUDA：
+
+```bash
+uv run python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available())"
 ```
 
 ## Run

@@ -93,12 +93,48 @@ DEFAULT_VAD_SPEECH_MERGE_GAP_MS = _clamp_int(
 DEFAULT_API_CONCURRENCY = _clamp_int(_int(_SAVED_CONFIG.get("api_concurrency"), 4), 1, 16)
 CONFIG_NOTE = f"配置文件：`{_CONFIG_PATH}`（自动保存，明文保存 key，删除该文件即可重置）"
 
+
+def _detect_cuda() -> tuple[bool, str]:
+    try:
+        import torch  # type: ignore
+    except Exception as e:
+        return False, f"torch 未安装：{e}"
+
+    try:
+        torch_version = getattr(torch, "__version__", "unknown")
+        cuda_version = getattr(getattr(torch, "version", None), "cuda", None) or "n/a"
+        available = bool(torch.cuda.is_available())
+        if not available:
+            return False, f"torch={torch_version}, cuda={cuda_version}, available=False"
+
+        count = int(torch.cuda.device_count())
+        names: list[str] = []
+        for i in range(min(count, 4)):
+            try:
+                names.append(str(torch.cuda.get_device_name(i)))
+            except Exception:
+                continue
+        devices = ", ".join(names) if names else "unknown"
+        return True, f"torch={torch_version}, cuda={cuda_version}, devices={count}, names={devices}"
+    except Exception as e:
+        return False, f"CUDA 检测异常：{e}"
+
+
+CUDA_AVAILABLE, CUDA_DETAILS = _detect_cuda()
+CUDA_NOTE = (
+    f"CUDA 检测：{'可用' if CUDA_AVAILABLE else '不可用'}（{CUDA_DETAILS}）"
+    if CUDA_DETAILS
+    else "CUDA 检测：未知"
+)
+THEME = gr.themes.Soft()
+
 logger.info(
     "auto-asr 启动: config=%s, exists=%s, api_key_saved=%s",
     _CONFIG_PATH,
     _CONFIG_PATH.exists(),
     bool(DEFAULT_OPENAI_API_KEY),
 )
+logger.info("auto-asr CUDA 检测: available=%s, details=%s", CUDA_AVAILABLE, CUDA_DETAILS)
 
 
 def _auto_save_settings(
@@ -292,7 +328,6 @@ def run_asr(
 
 with gr.Blocks(
     title="Auto-ASR",
-    theme=gr.themes.Base(primary_hue=gr.themes.utils.colors.blue),
 ) as demo:
     gr.Markdown(
         "\n".join(
@@ -368,6 +403,7 @@ with gr.Blocks(
                 debug = gr.Textbox(label="调试信息", lines=2)
 
         with gr.Tab("引擎配置", id="tab_engine"):
+            gr.Markdown(CUDA_NOTE)
             with (
                 gr.Group(visible=DEFAULT_ASR_BACKEND == "openai") as openai_group,
                 gr.Accordion("OpenAI 配置", open=True),
@@ -581,4 +617,4 @@ with gr.Blocks(
 
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(theme=THEME)
