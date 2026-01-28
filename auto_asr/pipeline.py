@@ -150,19 +150,105 @@ def transcribe_to_subtitles(
         )
 
         subtitle_lines: list[SubtitleLine] = []
-        if output_format in {"srt", "vtt"}:
-            if asr.segments:
-                for seg in asr.segments:
-                    subtitle_lines.append(
-                        SubtitleLine(start_s=seg.start_s, end_s=seg.end_s, text=seg.text)
-                    )
+        full_text_parts: list[str] = []
+        used_vad_speech_fallback = False
+
+        # If FunASR doesn't provide timestamps (segments=0), fall back to Silero VAD speech regions
+        # to build a reliable subtitle time axis.
+        if (
+            output_format in {"srt", "vtt"}
+            and (not asr.segments)
+            and enable_vad
+            and timeline_strategy == "vad_speech"
+        ):
+            _check_cancel(cancel_event)
+            vad_model = get_vad_model()
+            if vad_model is None:
+                logger.info("FunASR segments=0 且 VAD 模型不可用，降级为整段字幕。")
             else:
-                subtitle_lines.append(
-                    SubtitleLine(start_s=0.0, end_s=max(duration_s, 0.01), text=asr.text)
+                regions = process_vad_speech(
+                    wav_for_duration,
+                    vad_model,
+                    max_utterance_s=int(vad_speech_max_utterance_s),
+                    merge_gap_ms=int(vad_speech_merge_gap_ms),
+                    vad_threshold=float(vad_threshold),
+                    vad_min_speech_duration_ms=int(vad_min_speech_duration_ms),
+                    vad_min_silence_duration_ms=int(vad_min_silence_duration_ms),
+                    vad_speech_pad_ms=int(vad_speech_pad_ms),
                 )
+                if regions:
+                    used_vad_speech_fallback = True
+                    logger.info(
+                        "FunASR segments=0，启用 VAD 时间轴回退: regions=%d, "
+                        "max_utterance=%ss, merge_gap=%dms",
+                        len(regions),
+                        int(vad_speech_max_utterance_s),
+                        int(vad_speech_merge_gap_ms),
+                    )
+                    with TemporaryDirectory(prefix="auto-asr-funasr-") as tmp_dir:
+                        for idx, (start_sample, end_sample, wav_region) in enumerate(regions):
+                            _check_cancel(cancel_event)
+                            region_wav_path = os.path.join(tmp_dir, f"region_{idx:06d}.wav")
+                            save_audio_file(wav_region, region_wav_path)
+
+                            region_dur_s = (end_sample - start_sample) / float(WAV_SAMPLE_RATE)
+                            seg_asr = transcribe_file_funasr(
+                                file_path=region_wav_path,
+                                model=funasr_model,
+                                device=resolved_device,
+                                language=lang,
+                                use_itn=bool(funasr_use_itn),
+                                enable_vad=bool(funasr_enable_vad),
+                                enable_punc=bool(funasr_enable_punc),
+                                duration_s=region_dur_s,
+                            )
+
+                            seg_text = (seg_asr.text or "").strip()
+                            if seg_text:
+                                full_text_parts.append(seg_text)
+
+                            offset_s = start_sample / float(WAV_SAMPLE_RATE)
+                            if seg_asr.segments:
+                                for seg in seg_asr.segments:
+                                    subtitle_lines.append(
+                                        SubtitleLine(
+                                            start_s=offset_s + seg.start_s,
+                                            end_s=offset_s + seg.end_s,
+                                            text=seg.text,
+                                        )
+                                    )
+                            else:
+                                subtitle_lines.append(
+                                    SubtitleLine(
+                                        start_s=offset_s,
+                                        end_s=offset_s + max(region_dur_s, 0.01),
+                                        text=seg_text or seg_asr.text,
+                                    )
+                                )
+                else:
+                    logger.info("VAD 未检测到语音段，降级为整段字幕。")
+
+        if used_vad_speech_fallback and not subtitle_lines:
+            # If all VAD segments produced empty text, fall back to one-shot output.
+            used_vad_speech_fallback = False
+
+        if not used_vad_speech_fallback:
+            if output_format in {"srt", "vtt"}:
+                if asr.segments:
+                    for seg in asr.segments:
+                        subtitle_lines.append(
+                            SubtitleLine(start_s=seg.start_s, end_s=seg.end_s, text=seg.text)
+                        )
+                else:
+                    subtitle_lines.append(
+                        SubtitleLine(start_s=0.0, end_s=max(duration_s, 0.01), text=asr.text)
+                    )
+            full_text = (asr.text or "").strip()
+        else:
+            subtitle_lines.sort(key=lambda x: (x.start_s, x.end_s))
+            full_text = "\n".join([t for t in full_text_parts if t]).strip()
 
         subtitle_lines.sort(key=lambda x: (x.start_s, x.end_s))
-        full_text = (asr.text or "").strip()
 
         if output_format == "srt":
             subtitle_text = compose_srt(subtitle_lines)
@@ -179,15 +265,18 @@ def transcribe_to_subtitles(
         _write_text(out_path, subtitle_text)
 
         preview = subtitle_text[:5000]
+        seg_count = len(subtitle_lines) if output_format in {"srt", "vtt"} else 0
         debug = (
             f"backend=funasr, model={funasr_model}, device={resolved_device}, "
-            f"segments={len(asr.segments)}, duration_s={duration_s:.2f}"
+            f"segments={seg_count}, duration_s={duration_s:.2f}, "
+            f"vad_speech_fallback={'on' if used_vad_speech_fallback else 'off'}"
         )
         logger.info(
-            "转写完成(funasr): out=%s, segments=%d, duration=%.2fs",
+            "转写完成(funasr): out=%s, segments=%d, duration=%.2fs, vad_speech_fallback=%s",
             out_path,
-            len(asr.segments),
+            seg_count,
             duration_s,
+            used_vad_speech_fallback,
         )
         return PipelineResult(
             preview_text=preview,
