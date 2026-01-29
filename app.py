@@ -18,6 +18,7 @@ from auto_asr.subtitle_processing.pipeline import (
     process_subtitle_file,
     process_subtitle_file_multi,
 )
+from auto_asr.subtitle_processing.settings import save_subtitle_provider_settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -239,6 +240,27 @@ def release_cuda_ui() -> str:
         logger.exception("释放显存失败")
         return f"释放失败：{e}"
     return "已释放 FunASR 模型缓存/显存（如仍显示占用，通常是 PyTorch 缓存行为）。"
+
+
+def _save_subtitle_provider_settings_ui(
+    subtitle_provider: str,
+    subtitle_openai_api_key: str,
+    subtitle_openai_base_url: str,
+    subtitle_llm_model: str,
+    split_strategy: str,
+):
+    try:
+        save_subtitle_provider_settings(
+            provider=subtitle_provider,
+            openai_api_key=subtitle_openai_api_key,
+            openai_base_url=subtitle_openai_base_url,
+            llm_model=subtitle_llm_model,
+            split_strategy=split_strategy,
+        )
+    except Exception as e:
+        logger.exception("保存字幕处理 LLM 配置失败: %s", e)
+        return f"保存字幕处理配置失败：{e}"
+    return None
 
 
 def _auto_save_settings(
@@ -496,14 +518,12 @@ def run_subtitle_processing(
             "mode": (split_mode or "").strip() or "inplace_newlines",
         }
 
-    update_config(
-        {
-            "subtitle_provider": provider,
-            "subtitle_openai_api_key": api_key,
-            "subtitle_openai_base_url": (subtitle_openai_base_url or "").strip(),
-            "subtitle_llm_model": llm_model,
-            "subtitle_split_strategy": (split_strategy or "").strip() or "semantic",
-        }
+    save_subtitle_provider_settings(
+        provider=provider,
+        openai_api_key=api_key,
+        openai_base_url=subtitle_openai_base_url,
+        llm_model=llm_model,
+        split_strategy=split_strategy,
     )
 
     out_dir = str(Path("outputs") / "processed")
@@ -643,6 +663,7 @@ with gr.Blocks(
                     label="模型名",
                     value=DEFAULT_SUBTITLE_LLM_MODEL,
                 )
+                subtitle_llm_settings_state = gr.State(None)
 
             subtitle_in = gr.File(
                 label="字幕文件（SRT/VTT）",
@@ -905,6 +926,67 @@ with gr.Blocks(
     )
     release_cuda_btn.click(
         fn=release_cuda_ui, inputs=[], outputs=[release_cuda_status], queue=False
+    )
+
+    subtitle_provider.change(
+        fn=_save_subtitle_provider_settings_ui,
+        inputs=[
+            subtitle_provider,
+            subtitle_openai_api_key,
+            subtitle_openai_base_url,
+            subtitle_llm_model,
+            split_strategy,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    subtitle_openai_api_key.change(
+        fn=_save_subtitle_provider_settings_ui,
+        inputs=[
+            subtitle_provider,
+            subtitle_openai_api_key,
+            subtitle_openai_base_url,
+            subtitle_llm_model,
+            split_strategy,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    subtitle_openai_base_url.change(
+        fn=_save_subtitle_provider_settings_ui,
+        inputs=[
+            subtitle_provider,
+            subtitle_openai_api_key,
+            subtitle_openai_base_url,
+            subtitle_llm_model,
+            split_strategy,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    subtitle_llm_model.change(
+        fn=_save_subtitle_provider_settings_ui,
+        inputs=[
+            subtitle_provider,
+            subtitle_openai_api_key,
+            subtitle_openai_base_url,
+            subtitle_llm_model,
+            split_strategy,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    split_strategy.change(
+        fn=_save_subtitle_provider_settings_ui,
+        inputs=[
+            subtitle_provider,
+            subtitle_openai_api_key,
+            subtitle_openai_base_url,
+            subtitle_llm_model,
+            split_strategy,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
     )
 
     subtitle_run_btn.click(
