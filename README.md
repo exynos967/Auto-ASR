@@ -21,6 +21,8 @@ uv sync
 uv sync --extra funasr
 ```
 
+如遇报错 `No module named 'tiktoken'`，说明缺少 SenseVoice/FunASR-Nano 可能用到的 tokenizer 依赖；重新执行上面的 `uv sync --extra funasr`（或单独 `uv pip install tiktoken`）即可。
+
 FunASR 本地模型（HuggingFace）：
 
 - SenseVoiceSmall: `https://huggingface.co/iic/SenseVoiceSmall`

@@ -96,8 +96,6 @@ def get_remote_code_candidates(*, model: str, model_dir_or_id: str) -> list[str]
                         ".",  # another common relative-dir form
                         "./model.py",
                         "model.py",
-                        str(md),
-                        str(cand),
                     ]
                 )
     except Exception:
@@ -130,9 +128,10 @@ def _funasr_nano_remote_code_candidates(model: str, _model_dir_or_id: str) -> li
         # Import for side-effects: register FunASRNano into FunASR registry.
         from funasr.models.fun_asr_nano import model as nano_model  # type: ignore
 
-        nano_file = getattr(nano_model, "__file__", None)
-        if nano_file:
-            return [str(Path(nano_file).resolve())]
+        # The Nano implementation lives inside FunASR package, so we don't need (and shouldn't)
+        # pass `remote_code` at all. Just importing it is enough.
+        _ = getattr(nano_model, "__file__", None)
+        return []
     except Exception as e:
         # Compatibility workaround for older PyPI versions:
         # `funasr.models.fun_asr_nano.model` used to import local modules via
@@ -147,12 +146,9 @@ def _funasr_nano_remote_code_candidates(model: str, _model_dir_or_id: str) -> li
             model_py = nano_dir / "model.py"
             if model_py.exists():
                 src = model_py.read_text(encoding="utf-8")
-                patched = (
-                    src.replace("from ctc import CTC", "from .ctc import CTC")
-                    .replace(
-                        "from tools.utils import forced_align",
-                        "from .tools.utils import forced_align",
-                    )
+                patched = src.replace("from ctc import CTC", "from .ctc import CTC").replace(
+                    "from tools.utils import forced_align",
+                    "from .tools.utils import forced_align",
                 )
                 if patched != src:
                     mod = types.ModuleType(model_mod_name)
@@ -161,7 +157,7 @@ def _funasr_nano_remote_code_candidates(model: str, _model_dir_or_id: str) -> li
                     sys.modules[model_mod_name] = mod
                     exec(compile(patched, str(model_py), "exec"), mod.__dict__)
                     logger.info("FunASRNano 兼容导入成功: runtime patched imports: %s", model_py)
-                    return [str(model_py.resolve())]
+                    return []
         except Exception:
             pass
 
@@ -177,7 +173,7 @@ def _funasr_nano_remote_code_candidates(model: str, _model_dir_or_id: str) -> li
                     nano_file = getattr(nano_model, "__file__", None)
                     if nano_file:
                         logger.info("FunASRNano 兼容导入成功: added_sys_path=%s", nano_dir)
-                        return [str(Path(nano_file).resolve())]
+                        return []
                 finally:
                     # Remove our sys.path injection to avoid polluting global imports.
                     if sys.path and sys.path[0] == str(nano_dir):

@@ -36,7 +36,9 @@ def _needs_trust_remote_code(model: str) -> bool:
     """
 
     m = (model or "").lower()
-    return ("sensevoice" in m) or ("fun-asr-nano" in m) or ("funasrnano" in m)
+    # SenseVoice models ship custom code and tokenizer logic.
+    # Fun-ASR-Nano uses FunASR's built-in implementation and does not require remote code loading.
+    return "sensevoice" in m
 
 
 def _is_not_registered_error(exc: BaseException) -> bool:
@@ -47,6 +49,11 @@ def _is_not_registered_error(exc: BaseException) -> bool:
 def _raise_if_missing_tokenizers_deps(exc: BaseException) -> None:
     # FunASR 1.3.1 has a known failure mode when `transformers` is missing: it raises
     # UnboundLocalError about `AutoTokenizer` not being associated with a value.
+    if isinstance(exc, ModuleNotFoundError) and getattr(exc, "name", "") == "tiktoken":
+        raise RuntimeError(
+            "FunASR 依赖缺失: 未安装 tiktoken。"
+            "请执行 `uv sync --extra funasr` 或 `uv pip install tiktoken`。"
+        ) from exc
     if "AutoTokenizer" in str(exc):
         raise RuntimeError(
             "FunASR 依赖缺失: 似乎未安装 transformers/sentencepiece. "
@@ -182,9 +189,7 @@ def _make_model(cfg: FunASRConfig) -> Any:
                 last_exc = e2
             else:
                 _MODEL_CACHE[key] = model
-                logger.info(
-                    "FunASR 模型已加载: model=%s, device=%s, vad=%s, punc=%s", *key
-                )
+                logger.info("FunASR 模型已加载: model=%s, device=%s, vad=%s, punc=%s", *key)
                 return model
 
         # Retry 2: try remote_code candidates (best-effort).
@@ -475,11 +480,7 @@ def _extract_segments_from_result(res: Any, *, duration_s: float) -> tuple[str, 
                         if ch.isascii() and ch.isalnum():
                             if ascii_mode == "word":
                                 start_i = i
-                                while (
-                                    i < len(text)
-                                    and text[i].isascii()
-                                    and text[i].isalnum()
-                                ):
+                                while i < len(text) and text[i].isascii() and text[i].isalnum():
                                     i += 1
                                 _append_timed_token(text[start_i:i])
                             else:

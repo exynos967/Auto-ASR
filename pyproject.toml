@@ -20,6 +20,8 @@ funasr = [
     # Some FunASR models rely on HuggingFace tokenizers (AutoTokenizer).
     "transformers",
     "sentencepiece",
+    # SenseVoice/FunASR-Nano tokenizers may require `tiktoken`.
+    "tiktoken",
 ]
 
 [dependency-groups]
