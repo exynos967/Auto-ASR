@@ -69,18 +69,18 @@ DEFAULT_VAD_MAX_SEGMENT_THRESHOLD_S = _clamp_int(
     _int(_SAVED_CONFIG.get("vad_max_segment_threshold_s"), 180), 60, 360
 )
 try:
-    DEFAULT_VAD_THRESHOLD = float(_SAVED_CONFIG.get("vad_threshold", 0.5))
+    DEFAULT_VAD_THRESHOLD = float(_SAVED_CONFIG.get("vad_threshold", 0.25))
 except Exception:
-    DEFAULT_VAD_THRESHOLD = 0.5
+    DEFAULT_VAD_THRESHOLD = 0.25
 DEFAULT_VAD_THRESHOLD = max(0.1, min(0.9, DEFAULT_VAD_THRESHOLD))
 
 DEFAULT_VAD_MIN_SPEECH_DURATION_MS = _clamp_int(
-    _int(_SAVED_CONFIG.get("vad_min_speech_duration_ms"), 200), 50, 2000
+    _int(_SAVED_CONFIG.get("vad_min_speech_duration_ms"), 100), 50, 2000
 )
 DEFAULT_VAD_MIN_SILENCE_DURATION_MS = _clamp_int(
-    _int(_SAVED_CONFIG.get("vad_min_silence_duration_ms"), 200), 50, 2000
+    _int(_SAVED_CONFIG.get("vad_min_silence_duration_ms"), 300), 50, 2000
 )
-DEFAULT_VAD_SPEECH_PAD_MS = _clamp_int(_int(_SAVED_CONFIG.get("vad_speech_pad_ms"), 200), 0, 2000)
+DEFAULT_VAD_SPEECH_PAD_MS = _clamp_int(_int(_SAVED_CONFIG.get("vad_speech_pad_ms"), 400), 0, 2000)
 DEFAULT_TIMELINE_STRATEGY = _str(_SAVED_CONFIG.get("timeline_strategy", "vad_speech")).strip()
 if DEFAULT_TIMELINE_STRATEGY not in {"chunk", "vad_speech"}:
     DEFAULT_TIMELINE_STRATEGY = "vad_speech"
@@ -92,10 +92,10 @@ if DEFAULT_UPLOAD_AUDIO_FORMAT not in {"wav", "mp3"}:
 UPLOAD_MP3_BITRATE_KBPS = 192
 
 DEFAULT_VAD_SPEECH_MAX_UTTERANCE_S = _clamp_int(
-    _int(_SAVED_CONFIG.get("vad_speech_max_utterance_s"), 20), 5, 60
+    _int(_SAVED_CONFIG.get("vad_speech_max_utterance_s"), 8), 5, 60
 )
 DEFAULT_VAD_SPEECH_MERGE_GAP_MS = _clamp_int(
-    _int(_SAVED_CONFIG.get("vad_speech_merge_gap_ms"), 300), 0, 2000
+    _int(_SAVED_CONFIG.get("vad_speech_merge_gap_ms"), 100), 0, 2000
 )
 DEFAULT_API_CONCURRENCY = _clamp_int(_int(_SAVED_CONFIG.get("api_concurrency"), 4), 1, 16)
 CONFIG_NOTE = f"配置文件：`{_CONFIG_PATH}`（自动保存，明文保存 key，删除该文件即可重置）"
