@@ -87,7 +87,9 @@ def get_remote_code_candidates(*, model: str, model_dir_or_id: str) -> list[str]
         if md.exists():
             cand = md / "model.py"
             if cand.exists():
-                candidates.append(str(cand))
+                # Prefer the canonical relative path used by FunASR docs/README:
+                # `remote_code="./model.py"`.
+                candidates.extend(["./model.py", "model.py", str(cand)])
     except Exception:
         pass
 

@@ -143,6 +143,13 @@ def _make_model(cfg: FunASRConfig) -> Any:
         # FunASR 会在初始化时做版本更新检查 (可能较慢), 这里默认禁用。
         "disable_update": True,
     }
+    if trust_remote_code and remote_code_candidates:
+        model_kwargs["remote_code"] = remote_code_candidates[0]
+        logger.info(
+            "FunASR trust_remote_code=on, default remote_code=%s, model=%s",
+            model_kwargs["remote_code"],
+            cfg.model,
+        )
 
     # Try to enable built-in VAD / punctuation when requested. These are common in FunASR.
     if cfg.enable_vad:
