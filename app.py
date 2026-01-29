@@ -645,7 +645,7 @@ with gr.Blocks(
                 choices=[
                     ("字幕校正（LLM）", "optimize"),
                     ("字幕翻译（LLM）", "translate"),
-                    ("字幕分割（LLM）", "split"),
+                    ("智能断句（LLM）", "split"),
                 ],
                 value=["optimize"],
                 label="处理类型（可多选）",
