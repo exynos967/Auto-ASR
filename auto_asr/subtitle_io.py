@@ -28,7 +28,7 @@ def _parse_timestamp(raw: str) -> float:
     else:
         raise ValueError(f"invalid timestamp: {raw!r}")
 
-    ms = int((ms_raw + "000")[:3])
+    ms = int(ms_raw.rjust(3, "0")[:3])
     return (h * 3600) + (m * 60) + s + (ms / 1000.0)
 
 

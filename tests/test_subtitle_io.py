@@ -13,6 +13,18 @@ def test_load_srt_basic(tmp_path):
     assert lines[0].text == "hello"
 
 
+def test_load_srt_short_ms_is_left_padded(tmp_path):
+    p = tmp_path / "short_ms.srt"
+    p.write_text(
+        "1\n00:00:01,5 --> 00:00:02,0\nhello\n\n",
+        encoding="utf-8",
+    )
+    lines = load_subtitle_file(str(p))
+    assert len(lines) == 1
+    assert abs(lines[0].start_s - 1.005) < 1e-9
+    assert abs(lines[0].end_s - 2.0) < 1e-9
+
+
 def test_load_srt_without_index_line(tmp_path):
     p = tmp_path / "no_index.srt"
     p.write_text(
