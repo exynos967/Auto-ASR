@@ -42,3 +42,22 @@ def test_pipeline_runs_split_and_writes_file(tmp_path):
     assert res.out_path.endswith(".srt")
     out_text = (tmp_path / res.out_path.split("/")[-1]).read_text(encoding="utf-8")
     assert "a\nb" in out_text
+
+
+def test_pipeline_allows_omitting_api_key_when_custom_chat_json(tmp_path):
+    p = tmp_path / "a.srt"
+    p.write_text("1\n00:00:00,000 --> 00:00:02,000\nab\n\n", encoding="utf-8")
+
+    def chat_json(*, system_prompt: str, payload: dict[str, str], **_kwargs):
+        key = next(iter(payload.keys()))
+        return {key: "a<br>b"}
+
+    res = process_subtitle_file(
+        str(p),
+        processor="split",
+        out_dir=str(tmp_path),
+        options={"mode": "inplace_newlines", "concurrency": 1},
+        llm_model="gpt-test",
+        chat_json=chat_json,
+    )
+    assert res.out_path.endswith(".srt")

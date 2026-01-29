@@ -77,9 +77,9 @@ def process_subtitle_file(
     processor: str,
     out_dir: str,
     options: dict,
-    llm_model: str,
-    openai_api_key: str,
-    openai_base_url: str | None,
+    llm_model: str = "gpt-4o-mini",
+    openai_api_key: str = "",
+    openai_base_url: str | None = None,
     chat_json: Callable[..., dict[str, str]] | None = None,
 ) -> SubtitleProcessingResult:
     """Process a subtitle file and write processed output to disk.

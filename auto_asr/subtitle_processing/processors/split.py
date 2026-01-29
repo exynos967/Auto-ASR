@@ -40,7 +40,8 @@ def split_line_to_cues(line: SubtitleLine, parts: list[str]) -> list[SubtitleLin
 
     out: list[SubtitleLine] = []
     cur_ms = 0
-    for i, (w, txt) in enumerate(zip(weights, parts, strict=False)):
+    for i, txt in enumerate(parts):
+        w = weights[i]
         next_ms = total_ms if i == len(parts) - 1 else cur_ms + math.floor(total_ms * (w / total_w))
 
         seg_start_s = start_s + (cur_ms / 1000.0)
@@ -108,7 +109,8 @@ class SplitProcessor(SubtitleProcessor):
         parts_map: dict[str, list[str]] = {}
         with ThreadPoolExecutor(max_workers=concurrency) as ex:
             futs = [ex.submit(split_one, k, line) for k, line in indexed]
-            for fut, (k, line) in zip(futs, indexed, strict=False):
+            for idx, fut in enumerate(futs):
+                k, line = indexed[idx]
                 try:
                     key, parts = fut.result()
                 except Exception:

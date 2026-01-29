@@ -79,7 +79,8 @@ class OptimizeProcessor(SubtitleProcessor):
 
         with ThreadPoolExecutor(max_workers=concurrency) as ex:
             futs = [ex.submit(run_batch, b) for b in batches]
-            for fut, batch in zip(futs, batches, strict=False):
+            for idx, fut in enumerate(futs):
+                batch = batches[idx]
                 try:
                     results.update({str(k): str(v) for k, v in fut.result().items()})
                 except Exception as e:
