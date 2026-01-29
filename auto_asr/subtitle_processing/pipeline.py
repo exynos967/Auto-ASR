@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from openai import OpenAI
 
@@ -42,7 +42,11 @@ def _make_openai_chat_json(
     if base_url and base_url.strip():
         base_url_norm = normalize_base_url(base_url)
 
-    client = OpenAI(api_key=api_key, base_url=base_url_norm) if base_url_norm else OpenAI(api_key=api_key)
+    client = (
+        OpenAI(api_key=api_key, base_url=base_url_norm)
+        if base_url_norm
+        else OpenAI(api_key=api_key)
+    )
 
     def chat_fn(messages, *, model: str, temperature: float):
         resp = client.chat.completions.create(
@@ -99,28 +103,27 @@ def process_subtitle_file(
 
     started = time.time()
     out_lines = proc.process(lines, ctx=ctx, options=options or {})
-    elapsed_ms = int(round((time.time() - started) * 1000.0))
+    elapsed_ms = round((time.time() - started) * 1000.0)
 
     ext = in_path_p.suffix.lower().lstrip(".") or "srt"
     if ext not in {"srt", "vtt"}:
         ext = "srt"
 
-    if ext == "vtt":
-        out_text = compose_vtt(out_lines)
-    else:
-        out_text = compose_srt(out_lines)
+    out_text = compose_vtt(out_lines) if ext == "vtt" else compose_srt(out_lines)
 
     out_name = f"{in_path_p.stem}--{processor}--{time.strftime('%Y%m%d-%H%M%S')}.{ext}"
     out_path = Path(out_dir) / out_name
     _write_text(out_path, out_text)
 
-    preview_lines = [l.text for l in out_lines[:20] if (l.text or "").strip()]
+    preview_lines = [line.text for line in out_lines[:20] if (line.text or "").strip()]
     preview = "\n".join(preview_lines).strip()
-    debug = f"processor={processor}, cues_in={len(lines)}, cues_out={len(out_lines)}, elapsed={elapsed_ms}ms"
+    debug = (
+        f"processor={processor}, cues_in={len(lines)}, cues_out={len(out_lines)}, "
+        f"elapsed={elapsed_ms}ms"
+    )
     logger.info("subtitle processing done: %s", debug)
 
     return SubtitleProcessingResult(out_path=str(out_path), preview_text=preview, debug=debug)
 
 
 __all__ = ["SubtitleProcessingResult", "process_subtitle_file"]
-

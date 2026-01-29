@@ -4,8 +4,11 @@ import math
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from auto_asr.subtitle_processing.base import ProcessorContext, SubtitleProcessor, register_processor
-
+from auto_asr.subtitle_processing.base import (
+    ProcessorContext,
+    SubtitleProcessor,
+    register_processor,
+)
 from auto_asr.subtitles import SubtitleLine
 
 
@@ -31,17 +34,14 @@ def split_line_to_cues(line: SubtitleLine, parts: list[str]) -> list[SubtitleLin
     if end_s <= start_s:
         end_s = start_s + 0.001
 
-    total_ms = max(1, int(round((end_s - start_s) * 1000.0)))
+    total_ms = max(1, round((end_s - start_s) * 1000.0))
     weights = [_segment_weight(p) for p in parts]
     total_w = sum(weights)
 
     out: list[SubtitleLine] = []
     cur_ms = 0
     for i, (w, txt) in enumerate(zip(weights, parts, strict=False)):
-        if i == len(parts) - 1:
-            next_ms = total_ms
-        else:
-            next_ms = cur_ms + int(math.floor(total_ms * (w / total_w)))
+        next_ms = total_ms if i == len(parts) - 1 else cur_ms + math.floor(total_ms * (w / total_w))
 
         seg_start_s = start_s + (cur_ms / 1000.0)
         seg_end_s = start_s + (next_ms / 1000.0)

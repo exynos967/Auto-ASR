@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from auto_asr.subtitle_processing.base import ProcessorContext
-from auto_asr.subtitle_processing.processors.split import SplitProcessor
+from auto_asr.subtitle_processing.processors.split import (
+    SplitProcessor,
+    split_line_to_cues,
+    split_text_by_delimiter,
+)
 from auto_asr.subtitles import SubtitleLine
-from auto_asr.subtitle_processing.processors.split import split_line_to_cues, split_text_by_delimiter
 
 
 def test_split_text_by_delimiter_basic():

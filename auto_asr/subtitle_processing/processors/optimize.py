@@ -5,7 +5,11 @@ import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from auto_asr.subtitle_processing.base import ProcessorContext, SubtitleProcessor, register_processor
+from auto_asr.subtitle_processing.base import (
+    ProcessorContext,
+    SubtitleProcessor,
+    register_processor,
+)
 from auto_asr.subtitles import SubtitleLine
 
 logger = logging.getLogger(__name__)
@@ -87,11 +91,8 @@ class OptimizeProcessor(SubtitleProcessor):
             candidate = results.get(str(i), line.text)
             if _is_change_too_large(line.text, candidate):
                 candidate = line.text
-            out.append(
-                SubtitleLine(start_s=line.start_s, end_s=line.end_s, text=candidate)
-            )
+            out.append(SubtitleLine(start_s=line.start_s, end_s=line.end_s, text=candidate))
         return out
 
 
 __all__ = ["OptimizeProcessor"]
-

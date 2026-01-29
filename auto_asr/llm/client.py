@@ -34,6 +34,7 @@ def normalize_base_url(base_url: str) -> str:
         )
     )
 
+
 def _as_messages(system_prompt: str, payload: dict[str, str]) -> list[dict[str, str]]:
     return [
         {"role": "system", "content": system_prompt},

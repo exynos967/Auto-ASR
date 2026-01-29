@@ -3,7 +3,11 @@ from __future__ import annotations
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from auto_asr.subtitle_processing.base import ProcessorContext, SubtitleProcessor, register_processor
+from auto_asr.subtitle_processing.base import (
+    ProcessorContext,
+    SubtitleProcessor,
+    register_processor,
+)
 from auto_asr.subtitles import SubtitleLine
 
 logger = logging.getLogger(__name__)
@@ -66,4 +70,3 @@ class TranslateProcessor(SubtitleProcessor):
 
 
 __all__ = ["TranslateProcessor"]
-

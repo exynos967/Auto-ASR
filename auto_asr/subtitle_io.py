@@ -47,7 +47,7 @@ def _parse_srt(text: str) -> list[SubtitleLine]:
     out: list[SubtitleLine] = []
 
     block: list[str] = []
-    for line in lines + [""]:
+    for line in [*lines, ""]:
         if line.strip():
             block.append(line)
             continue
@@ -113,7 +113,7 @@ def _parse_vtt(text: str) -> list[SubtitleLine]:
             out.append(SubtitleLine(start_s=start_s, end_s=end_s, text=cue_text))
         block = []
 
-    for line in lines[idx:] + [""]:
+    for line in [*lines[idx:], ""]:
         if line.strip():
             block.append(line)
             continue
@@ -139,4 +139,3 @@ def load_subtitle_file(path: str) -> list[SubtitleLine]:
 
 
 __all__ = ["load_subtitle_file"]
-

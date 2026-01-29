@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from auto_asr.subtitle_processing.pipeline import process_subtitle_file
 
 
 def test_pipeline_requires_processor(tmp_path):
     p = tmp_path / "a.srt"
     p.write_text("1\n00:00:00,000 --> 00:00:01,000\nhello\n\n", encoding="utf-8")
-    try:
+    with pytest.raises(KeyError):
         process_subtitle_file(
             str(p),
             processor="nope",
@@ -17,9 +19,6 @@ def test_pipeline_requires_processor(tmp_path):
             openai_base_url=None,
             chat_json=None,
         )
-        assert False
-    except KeyError:
-        assert True
 
 
 def test_pipeline_runs_split_and_writes_file(tmp_path):
@@ -43,4 +42,3 @@ def test_pipeline_runs_split_and_writes_file(tmp_path):
     assert res.out_path.endswith(".srt")
     out_text = (tmp_path / res.out_path.split("/")[-1]).read_text(encoding="utf-8")
     assert "a\nb" in out_text
-

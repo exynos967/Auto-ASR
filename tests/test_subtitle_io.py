@@ -21,4 +21,3 @@ def test_load_vtt_basic(tmp_path):
     assert lines[0].start_s == 0.0
     assert lines[0].end_s == 1.0
     assert lines[0].text == "hi"
-

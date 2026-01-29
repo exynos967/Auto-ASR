@@ -49,4 +49,3 @@ def test_optimize_processor_keeps_original_when_change_too_large():
     ]
     out = proc.process(lines, ctx=ctx, options={"batch_size": 10, "concurrency": 1})
     assert [x.text for x in out] == ["hello world", "hello wor1d"]
-

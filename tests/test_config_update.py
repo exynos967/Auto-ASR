@@ -15,4 +15,3 @@ def test_update_config_preserves_api_key_when_blank(tmp_path, monkeypatch):
     loaded = config.load_config()
     assert loaded["openai_api_key"] == "sk-old"
     assert loaded["llm_model"] == "gpt-4o-mini"
-
