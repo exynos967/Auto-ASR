@@ -44,6 +44,21 @@ def save_config(config: dict[str, Any]) -> Path:
     return path
 
 
+def update_config(patch: dict[str, Any]) -> Path:
+    """Load existing config, merge a patch, and save it back.
+
+    Special-case: if patch contains an empty `openai_api_key`, keep the existing one.
+    """
+    cfg = load_config()
+
+    for key, value in (patch or {}).items():
+        if key == "openai_api_key" and not str(value or "").strip():
+            continue
+        cfg[key] = value
+
+    return save_config(cfg)
+
+
 def delete_config() -> bool:
     path = get_config_path()
     if not path.exists():
@@ -52,4 +67,4 @@ def delete_config() -> bool:
     return True
 
 
-__all__ = ["delete_config", "get_config_path", "load_config", "save_config"]
+__all__ = ["delete_config", "get_config_path", "load_config", "save_config", "update_config"]
