@@ -18,7 +18,10 @@ from auto_asr.subtitle_processing.pipeline import (
     process_subtitle_file,
     process_subtitle_file_multi,
 )
-from auto_asr.subtitle_processing.settings import save_subtitle_provider_settings
+from auto_asr.subtitle_processing.settings import (
+    save_subtitle_processing_settings,
+    save_subtitle_provider_settings,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -69,6 +72,28 @@ try:
 except Exception:
     DEFAULT_SUBTITLE_LLM_TEMPERATURE = 0.2
 DEFAULT_SUBTITLE_LLM_TEMPERATURE = max(0.0, min(2.0, DEFAULT_SUBTITLE_LLM_TEMPERATURE))
+
+DEFAULT_SUBTITLE_TARGET_LANGUAGE = _str(_SAVED_CONFIG.get("subtitle_target_language", "zh")).strip()
+if DEFAULT_SUBTITLE_TARGET_LANGUAGE not in {"zh", "en", "ja", "ko", "fr", "de", "es", "ru"}:
+    DEFAULT_SUBTITLE_TARGET_LANGUAGE = "zh"
+DEFAULT_SUBTITLE_SPLIT_MODE = _str(
+    _SAVED_CONFIG.get("subtitle_split_mode", "inplace_newlines")
+).strip() or "inplace_newlines"
+if DEFAULT_SUBTITLE_SPLIT_MODE not in {"inplace_newlines", "split_to_cues"}:
+    DEFAULT_SUBTITLE_SPLIT_MODE = "inplace_newlines"
+DEFAULT_SUBTITLE_CUSTOM_PROMPT = _str(_SAVED_CONFIG.get("subtitle_custom_prompt", ""))
+DEFAULT_SUBTITLE_BATCH_SIZE = _clamp_int(_int(_SAVED_CONFIG.get("subtitle_batch_size"), 30), 1, 200)
+DEFAULT_SUBTITLE_CONCURRENCY = _clamp_int(_int(_SAVED_CONFIG.get("subtitle_concurrency"), 4), 1, 16)
+
+_saved_subtitle_processors = _SAVED_CONFIG.get("subtitle_processors", ["optimize"])
+if isinstance(_saved_subtitle_processors, list):
+    DEFAULT_SUBTITLE_PROCESSORS = [
+        str(x)
+        for x in _saved_subtitle_processors
+        if str(x) in {"optimize", "translate", "split"}
+    ] or ["optimize"]
+else:
+    DEFAULT_SUBTITLE_PROCESSORS = ["optimize"]
 DEFAULT_SUBTITLE_SPLIT_STRATEGY = (
     _str(_SAVED_CONFIG.get("subtitle_split_strategy", "semantic")).strip() or "semantic"
 )
@@ -267,6 +292,29 @@ def _save_subtitle_provider_settings_ui(
     except Exception as e:
         logger.exception("保存字幕处理 LLM 配置失败: %s", e)
         return f"保存字幕处理配置失败：{e}"
+    return None
+
+
+def _save_subtitle_processing_settings_ui(
+    subtitle_processors: list[str] | None,
+    batch_size: int,
+    concurrency: int,
+    target_language: str,
+    split_mode: str,
+    custom_prompt: str,
+):
+    try:
+        save_subtitle_processing_settings(
+            processors=subtitle_processors,
+            batch_size=int(batch_size),
+            concurrency=int(concurrency),
+            target_language=target_language,
+            split_mode=split_mode,
+            custom_prompt=custom_prompt,
+        )
+    except Exception as e:
+        logger.exception("保存字幕处理参数失败: %s", e)
+        return f"保存字幕处理参数失败：{e}"
     return None
 
 
@@ -487,6 +535,15 @@ def run_subtitle_processing(
     if not subtitle_path:
         raise gr.Error("请先上传字幕文件（SRT/VTT）。")
 
+    save_subtitle_processing_settings(
+        processors=subtitle_processors,
+        batch_size=int(batch_size),
+        concurrency=int(concurrency),
+        target_language=target_language,
+        split_mode=split_mode,
+        custom_prompt=custom_prompt,
+    )
+
     processor_order = ["optimize", "translate", "split"]
     selected = [str(x).strip() for x in (subtitle_processors or []) if str(x).strip()]
     selected = [p for p in processor_order if p in set(selected)]
@@ -699,7 +756,7 @@ with gr.Blocks(
                     ("字幕翻译（LLM）", "translate"),
                     ("智能断句（LLM）", "split"),
                 ],
-                value=["optimize"],
+                value=DEFAULT_SUBTITLE_PROCESSORS,
                 label="处理类型（可多选）",
             )
 
@@ -715,7 +772,7 @@ with gr.Blocks(
                         ("西语", "es"),
                         ("俄语", "ru"),
                     ],
-                    value="zh",
+                    value=DEFAULT_SUBTITLE_TARGET_LANGUAGE,
                     label="目标语言（仅翻译）",
                 )
                 split_strategy = gr.Dropdown(
@@ -731,27 +788,28 @@ with gr.Blocks(
                         ("只插入换行（不改变时间轴）", "inplace_newlines"),
                         ("拆分为多条字幕（重新分配时间轴）", "split_to_cues"),
                     ],
-                    value="inplace_newlines",
+                    value=DEFAULT_SUBTITLE_SPLIT_MODE,
                     label="输出形式（仅断句）",
                 )
 
             custom_prompt = gr.Textbox(
                 label="自定义提示词（可选）",
                 placeholder="可补充术语/风格要求/注意事项等。",
+                value=DEFAULT_SUBTITLE_CUSTOM_PROMPT,
             )
 
             with gr.Row():
                 batch_size = gr.Slider(
                     minimum=1,
                     maximum=200,
-                    value=30,
+                    value=DEFAULT_SUBTITLE_BATCH_SIZE,
                     step=1,
                     label="Batch Size（翻译/校正）",
                 )
                 subtitle_concurrency = gr.Slider(
                     minimum=1,
                     maximum=16,
-                    value=4,
+                    value=DEFAULT_SUBTITLE_CONCURRENCY,
                     step=1,
                     label="并发数",
                 )
@@ -1025,6 +1083,85 @@ with gr.Blocks(
             subtitle_llm_model,
             subtitle_llm_temperature,
             split_strategy,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+
+    subtitle_processors.change(
+        fn=_save_subtitle_processing_settings_ui,
+        inputs=[
+            subtitle_processors,
+            batch_size,
+            subtitle_concurrency,
+            target_language,
+            split_mode,
+            custom_prompt,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    batch_size.change(
+        fn=_save_subtitle_processing_settings_ui,
+        inputs=[
+            subtitle_processors,
+            batch_size,
+            subtitle_concurrency,
+            target_language,
+            split_mode,
+            custom_prompt,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    subtitle_concurrency.change(
+        fn=_save_subtitle_processing_settings_ui,
+        inputs=[
+            subtitle_processors,
+            batch_size,
+            subtitle_concurrency,
+            target_language,
+            split_mode,
+            custom_prompt,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    target_language.change(
+        fn=_save_subtitle_processing_settings_ui,
+        inputs=[
+            subtitle_processors,
+            batch_size,
+            subtitle_concurrency,
+            target_language,
+            split_mode,
+            custom_prompt,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    split_mode.change(
+        fn=_save_subtitle_processing_settings_ui,
+        inputs=[
+            subtitle_processors,
+            batch_size,
+            subtitle_concurrency,
+            target_language,
+            split_mode,
+            custom_prompt,
+        ],
+        outputs=[subtitle_llm_settings_state],
+        queue=False,
+    )
+    custom_prompt.change(
+        fn=_save_subtitle_processing_settings_ui,
+        inputs=[
+            subtitle_processors,
+            batch_size,
+            subtitle_concurrency,
+            target_language,
+            split_mode,
+            custom_prompt,
         ],
         outputs=[subtitle_llm_settings_state],
         queue=False,

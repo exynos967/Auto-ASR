@@ -36,3 +36,53 @@ def save_subtitle_provider_settings(
 
 
 __all__ = ["save_subtitle_provider_settings"]
+
+
+def save_subtitle_processing_settings(
+    *,
+    processors: list[str] | None,
+    batch_size: int,
+    concurrency: int,
+    target_language: str,
+    split_mode: str,
+    custom_prompt: str,
+) -> None:
+    allowed_processors = {"optimize", "translate", "split"}
+    proc_list = [str(p).strip() for p in (processors or []) if str(p).strip()]
+    proc_list = [p for p in proc_list if p in allowed_processors]
+    if not proc_list:
+        proc_list = ["optimize"]
+
+    try:
+        bs = int(batch_size)
+    except Exception:
+        bs = 30
+    bs = max(1, min(200, bs))
+
+    try:
+        cc = int(concurrency)
+    except Exception:
+        cc = 4
+    cc = max(1, min(16, cc))
+
+    lang = (target_language or "").strip() or "zh"
+    if lang not in {"zh", "en", "ja", "ko", "fr", "de", "es", "ru"}:
+        lang = "zh"
+
+    mode = (split_mode or "").strip() or "inplace_newlines"
+    if mode not in {"inplace_newlines", "split_to_cues"}:
+        mode = "inplace_newlines"
+
+    update_config(
+        {
+            "subtitle_processors": proc_list,
+            "subtitle_batch_size": bs,
+            "subtitle_concurrency": cc,
+            "subtitle_target_language": lang,
+            "subtitle_split_mode": mode,
+            "subtitle_custom_prompt": str(custom_prompt or ""),
+        }
+    )
+
+
+__all__ = ["save_subtitle_processing_settings", "save_subtitle_provider_settings"]
