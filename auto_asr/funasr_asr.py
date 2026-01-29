@@ -381,21 +381,146 @@ def _extract_segments_from_result(res: Any, *, duration_s: float) -> tuple[str, 
                         merged_text = "\n".join(seg.text for seg in segments).strip() or full_text
                         return merged_text, segments
 
-                # No token text: fall back to whitespace split.
-                tokens = [t for t in re.split(r"\s+", full_text) if t]
-                if len(tokens) == len(token_entries):
-                    units: list[tuple[float, float, str]] = []
-                    for tok, (s, e, _t) in zip(tokens, token_entries, strict=False):
-                        units.append((s, e, tok))
-                    segments = _merge_caption_units(units, joiner=" ")
-                    if segments:
-                        logger.info(
-                            "FunASR timestamp parsed (whitespace tokens): tokens=%d, segments=%d",
-                            len(tokens),
-                            len(segments),
-                        )
-                        merged_text = "\n".join(seg.text for seg in segments).strip() or full_text
-                        return merged_text, segments
+                # No token text: some FunASR models return timestamp array like
+                # [[start_ms,end_ms], ...]
+                # without the corresponding token text. In that case we reconstruct the time axis by
+                # aligning the timestamp array to the output text (roughly: CJK chars -> 1 ts, ASCII
+                # words -> 1 ts). This is inspired by common scripts that generate SRT from FunASR
+                # timestamp arrays.
+                def _segments_from_timestamp_array(
+                    text: str, ts: list[tuple[float, float, str]]
+                ) -> list[ASRSegment]:
+                    if not text:
+                        return []
+                    pairs = [(s, e) for (s, e, _t) in ts]
+                    if not pairs:
+                        return []
+
+                    ascii_alnum = 0
+                    ascii_words = 0
+                    non_ascii_alnum = 0
+                    in_ascii_word = False
+                    for ch in text:
+                        if ch.isascii() and ch.isalnum():
+                            ascii_alnum += 1
+                            if not in_ascii_word:
+                                ascii_words += 1
+                                in_ascii_word = True
+                            continue
+                        in_ascii_word = False
+                        if (not ch.isascii()) and ch.isalnum():
+                            non_ascii_alnum += 1
+
+                    expected_word = ascii_words + non_ascii_alnum
+                    expected_char = ascii_alnum + non_ascii_alnum
+                    ascii_mode = (
+                        "word"
+                        if abs(len(pairs) - expected_word) <= abs(len(pairs) - expected_char)
+                        else "char"
+                    )
+
+                    segs: list[ASRSegment] = []
+                    buf = ""
+                    buf_start: float | None = None
+                    buf_end: float | None = None
+                    max_chars = 28
+                    max_dur_s = 6.0
+                    t_idx = 0
+                    i = 0
+
+                    def _flush() -> None:
+                        nonlocal buf, buf_start, buf_end
+                        if buf_start is None or buf_end is None:
+                            buf = ""
+                            buf_start = None
+                            buf_end = None
+                            return
+                        seg_text = _maybe_postprocess_text(buf)
+                        if seg_text:
+                            segs.append(
+                                ASRSegment(
+                                    start_s=float(buf_start),
+                                    end_s=float(buf_end),
+                                    text=seg_text,
+                                )
+                            )
+                        buf = ""
+                        buf_start = None
+                        buf_end = None
+
+                    def _append_timed_token(token: str) -> None:
+                        nonlocal buf, buf_start, buf_end, t_idx
+                        if t_idx >= len(pairs):
+                            return
+                        s, e = pairs[t_idx]
+                        t_idx += 1
+                        if buf_start is None:
+                            buf_start = s
+                        buf_end = e
+                        buf += token
+                        if buf_start is not None and buf_end is not None:
+                            dur = buf_end - buf_start
+                            if len(buf) >= max_chars or dur >= max_dur_s:
+                                _flush()
+
+                    while i < len(text):
+                        ch = text[i]
+                        if ch.isascii() and ch.isalnum():
+                            if ascii_mode == "word":
+                                start_i = i
+                                while (
+                                    i < len(text)
+                                    and text[i].isascii()
+                                    and text[i].isalnum()
+                                ):
+                                    i += 1
+                                _append_timed_token(text[start_i:i])
+                            else:
+                                _append_timed_token(ch)
+                                i += 1
+                            continue
+
+                        if (not ch.isascii()) and ch.isalnum():
+                            _append_timed_token(ch)
+                            i += 1
+                            continue
+
+                        if buf_start is not None:
+                            if ch in {"\r", "\n"}:
+                                _flush()
+                                i += 1
+                                continue
+                            if ch.isspace():
+                                # Keep a single space between ASCII words; do not append trailing
+                                # spaces after sentence-ending punctuation (to keep flush logic).
+                                if (
+                                    buf
+                                    and not buf.endswith(" ")
+                                    and buf.rstrip()
+                                    and buf.rstrip()[-1] not in _PUNCT_END
+                                ):
+                                    buf += " "
+                                i += 1
+                                continue
+
+                            buf += ch
+                            if ch in _PUNCT_END:
+                                _flush()
+
+                        i += 1
+
+                    _flush()
+                    return segs
+
+                segments = _segments_from_timestamp_array(full_text, token_entries)
+                if segments:
+                    logger.info(
+                        "FunASR timestamp parsed (timestamp-array): entries=%d, segments=%d",
+                        len(token_entries),
+                        len(segments),
+                    )
+                    merged_text = "\n".join(seg.text for seg in segments).strip() or full_text
+                    return merged_text, segments
 
         return full_text, []
 

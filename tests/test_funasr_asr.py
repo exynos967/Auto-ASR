@@ -57,3 +57,23 @@ def test_extract_segments_timestamp_tokens_sentencepiece_like():
     assert segments
     assert segments[0].start_s == 0.0
     assert segments[-1].end_s == 1.0
+
+
+def test_extract_segments_timestamp_array_without_tokens_aligned_to_text():
+    res = [
+        {
+            "text": "你好，世界。",
+            "timestamp": [
+                [0, 500],
+                [600, 1000],
+                [1100, 1500],
+                [1600, 2000],
+            ],
+        }
+    ]
+    full_text, segments = _extract_segments_from_result(res, duration_s=10.0)
+    assert full_text == "你好，世界。"
+    assert len(segments) == 1
+    assert segments[0].start_s == 0.0
+    assert segments[0].end_s == 2.0
+    assert segments[0].text == "你好，世界。"

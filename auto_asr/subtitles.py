@@ -48,10 +48,12 @@ def _normalize_text(text: str) -> str:
 
 def compose_srt(lines: list[SubtitleLine]) -> str:
     out: list[str] = []
-    for idx, line in enumerate(lines, start=1):
+    idx = 0
+    for line in lines:
         text = _normalize_text(line.text)
         if not text:
             continue
+        idx += 1
 
         start_s = _clamp_non_negative(line.start_s)
         end_s = _clamp_non_negative(line.end_s)
