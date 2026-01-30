@@ -22,7 +22,7 @@ class Qwen3ASRConfig:
     max_new_tokens: int = 1024
 
 
-_MODEL_CACHE: dict[tuple[str, str, str], Any] = {}
+_MODEL_CACHE: dict[tuple[str, str, str, int, int], Any] = {}
 
 
 def resolve_qwen3_language(language: str | None) -> str | None:
@@ -101,7 +101,13 @@ def download_qwen3_models(*, model: str, forced_aligner: str) -> tuple[str, str]
 
 
 def _make_model(cfg: Qwen3ASRConfig) -> Any:
-    key = (cfg.model, cfg.forced_aligner, _resolve_device(cfg.device))
+    key = (
+        cfg.model,
+        cfg.forced_aligner,
+        _resolve_device(cfg.device),
+        int(cfg.max_inference_batch_size),
+        int(cfg.max_new_tokens),
+    )
     cached = _MODEL_CACHE.get(key)
     if cached is not None:
         return cached

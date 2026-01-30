@@ -122,6 +122,9 @@ DEFAULT_QWEN3_FORCED_ALIGNER = _str(
 DEFAULT_QWEN3_DEVICE = _str(_SAVED_CONFIG.get("qwen3_device", "auto")).strip() or "auto"
 if DEFAULT_QWEN3_DEVICE not in {"auto", "cpu", "cuda:0"}:
     DEFAULT_QWEN3_DEVICE = "auto"
+DEFAULT_QWEN3_MAX_INFERENCE_BATCH_SIZE = _clamp_int(
+    _int(_SAVED_CONFIG.get("qwen3_max_inference_batch_size"), 8), 1, 64
+)
 DEFAULT_OUTPUT_FORMAT = _str(_SAVED_CONFIG.get("output_format", "srt")).strip() or "srt"
 if DEFAULT_OUTPUT_FORMAT not in {"srt", "vtt", "txt"}:
     DEFAULT_OUTPUT_FORMAT = "srt"
@@ -201,7 +204,26 @@ CUDA_NOTE = (
     if CUDA_DETAILS
     else "CUDA 检测：未知"
 )
-THEME = gr.themes.Soft()
+
+
+def _load_theme():
+    """Load the bundled 'miku' Gradio theme if present; fallback to Soft()."""
+
+    try:
+        base = Path(__file__).resolve().parent
+        candidates = [
+            base / "theme" / "miku" / "theme_schema@1.2.2.json",
+            base / "miku" / "themes" / "theme_schema@1.2.2.json",
+        ]
+        for theme_path in candidates:
+            if theme_path.exists():
+                return gr.Theme.load(str(theme_path))
+    except Exception as e:
+        logger.info("加载 miku 主题失败，回退默认主题: %s", e)
+    return gr.themes.Soft()
+
+
+THEME = _load_theme()
 
 logger.info(
     "auto-asr 启动: config=%s, exists=%s, api_key_saved=%s",
@@ -288,6 +310,7 @@ def load_qwen3_model_ui(
     qwen3_model: str,
     qwen3_forced_aligner: str,
     qwen3_device: str,
+    qwen3_max_inference_batch_size: int,
 ) -> str:
     resolved_device = _resolve_qwen3_device_ui(qwen3_device)
     try:
@@ -297,6 +320,7 @@ def load_qwen3_model_ui(
                 forced_aligner=(qwen3_forced_aligner or "").strip()
                 or "Qwen/Qwen3-ForcedAligner-0.6B",
                 device=resolved_device,
+                max_inference_batch_size=max(1, int(qwen3_max_inference_batch_size)),
             )
         )
     except Exception as e:
@@ -403,6 +427,7 @@ def _auto_save_settings(
     qwen3_model: str,
     qwen3_forced_aligner: str,
     qwen3_device: str,
+    qwen3_max_inference_batch_size: int,
     output_format: str,
     language: str,
     enable_vad: bool,
@@ -440,6 +465,7 @@ def _auto_save_settings(
         "qwen3_device": (qwen3_device or "").strip() or "auto",
         "qwen3_forced_aligner": (qwen3_forced_aligner or "").strip()
         or "Qwen/Qwen3-ForcedAligner-0.6B",
+        "qwen3_max_inference_batch_size": int(qwen3_max_inference_batch_size),
         "qwen3_model": (qwen3_model or "").strip() or "Qwen/Qwen3-ASR-1.7B",
         "timeline_strategy": (timeline_strategy or "").strip() or "vad_speech",
         "upload_audio_format": (upload_audio_format or "").strip() or "wav",
@@ -489,6 +515,7 @@ def run_asr(
     qwen3_model: str,
     qwen3_forced_aligner: str,
     qwen3_device: str,
+    qwen3_max_inference_batch_size: int,
 ):
     if not audio_path:
         raise gr.Error("请先上传或录制一段音频。")
@@ -538,6 +565,7 @@ def run_asr(
         qwen3_model=qwen3_model,
         qwen3_forced_aligner=qwen3_forced_aligner,
         qwen3_device=qwen3_device,
+        qwen3_max_inference_batch_size=qwen3_max_inference_batch_size,
         output_format=output_format,
         language=language,
         enable_vad=enable_vad,
@@ -563,6 +591,7 @@ def run_asr(
         resolved_qwen3_forced_aligner = (
             (qwen3_forced_aligner or "").strip() or DEFAULT_QWEN3_FORCED_ALIGNER
         )
+        resolved_qwen3_max_batch = _clamp_int(int(qwen3_max_inference_batch_size), 1, 64)
         result = transcribe_to_subtitles(
             input_audio_path=audio_path,
             asr_backend=asr_backend,
@@ -581,6 +610,7 @@ def run_asr(
             qwen3_model=resolved_qwen3_model,
             qwen3_forced_aligner=resolved_qwen3_forced_aligner,
             qwen3_device=(qwen3_device or "").strip() or DEFAULT_QWEN3_DEVICE,
+            qwen3_max_inference_batch_size=resolved_qwen3_max_batch,
             enable_vad=enable_vad,
             vad_segment_threshold_s=int(vad_segment_threshold_s),
             vad_max_segment_threshold_s=int(vad_max_segment_threshold_s),
@@ -972,6 +1002,13 @@ with gr.Blocks(
                     value=DEFAULT_QWEN3_DEVICE,
                     label="设备",
                 )
+                qwen3_max_inference_batch_size = gr.Slider(
+                    minimum=1,
+                    maximum=64,
+                    value=DEFAULT_QWEN3_MAX_INFERENCE_BATCH_SIZE,
+                    step=1,
+                    label="推理 Batch Size（并行；越大越快但更吃显存）",
+                )
 
             with gr.Accordion("FunASR 本地推理", open=False):
                 gr.Markdown("首次使用需安装：`uv sync --extra funasr`")
@@ -1144,7 +1181,12 @@ with gr.Blocks(
 
     load_qwen3_btn.click(
         fn=load_qwen3_model_ui,
-        inputs=[qwen3_model, qwen3_forced_aligner, qwen3_device],
+        inputs=[
+            qwen3_model,
+            qwen3_forced_aligner,
+            qwen3_device,
+            qwen3_max_inference_batch_size,
+        ],
         outputs=[load_qwen3_status],
     )
     release_cuda_btn.click(
@@ -1362,6 +1404,7 @@ with gr.Blocks(
             qwen3_model,
             qwen3_forced_aligner,
             qwen3_device,
+            qwen3_max_inference_batch_size,
         ],
         outputs=[preview, full_text, out_file, debug],
         concurrency_limit=1,

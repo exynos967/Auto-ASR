@@ -86,6 +86,7 @@ def transcribe_to_subtitles(
     qwen3_model: str = "Qwen/Qwen3-ASR-1.7B",
     qwen3_forced_aligner: str = "Qwen/Qwen3-ForcedAligner-0.6B",
     qwen3_device: str = "auto",
+    qwen3_max_inference_batch_size: int = 8,
     enable_vad: bool = True,
     vad_segment_threshold_s: int = 120,
     vad_max_segment_threshold_s: int = 180,
@@ -444,6 +445,7 @@ def transcribe_to_subtitles(
                 forced_aligner=(qwen3_forced_aligner or "").strip()
                 or "Qwen/Qwen3-ForcedAligner-0.6B",
                 device=(qwen3_device or "").strip() or "auto",
+                max_inference_batch_size=max(1, int(qwen3_max_inference_batch_size)),
             )
 
             wavs = [c.wav for c in chunks]

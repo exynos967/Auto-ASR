@@ -99,3 +99,6 @@ WebUI 使用提示：
 - Optional: install FunASR runtime deps for local inference: `uv sync --extra funasr` (also large).
 
 - Output files are written to `./outputs/`.
+
+## Gradio 主题
+- [MIKU](https://huggingface.co/spaces/NoCrypt/miku)

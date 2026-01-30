@@ -14,6 +14,7 @@ def test_transcribe_to_subtitles_qwen3_backend_uses_model_timestamps(tmp_path, m
         return [AudioChunk(start_sample=0, end_sample=16000, wav=wav)], False
 
     def fake_transcribe_chunks_qwen3(**_kwargs):
+        assert _kwargs["cfg"].max_inference_batch_size == 4
         return [
             ASRResult(
                 text="hello world",
@@ -51,6 +52,7 @@ def test_transcribe_to_subtitles_qwen3_backend_uses_model_timestamps(tmp_path, m
         qwen3_model="Qwen/Qwen3-ASR-1.7B",
         qwen3_forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
         qwen3_device="cpu",
+        qwen3_max_inference_batch_size=4,
     )
 
     out_text = (tmp_path / res.subtitle_file_path.split("/")[-1]).read_text(encoding="utf-8")
@@ -58,4 +60,3 @@ def test_transcribe_to_subtitles_qwen3_backend_uses_model_timestamps(tmp_path, m
     assert "hello" in out_text
     assert "00:00:00,500 --> 00:00:01,000" in out_text
     assert "world" in out_text
-
