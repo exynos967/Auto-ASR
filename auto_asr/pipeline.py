@@ -82,7 +82,6 @@ def transcribe_to_subtitles(
     funasr_device: str = "auto",
     funasr_language: str = "auto",
     funasr_use_itn: bool = True,
-    funasr_enable_vad: bool = True,
     funasr_enable_punc: bool = True,
     # Qwen3-ASR local inference (Transformers backend via qwen-asr)
     qwen3_model: str = "Qwen/Qwen3-ASR-1.7B",
@@ -197,7 +196,6 @@ def transcribe_to_subtitles(
                                     device=resolved_device,
                                     language=lang,
                                     use_itn=bool(funasr_use_itn),
-                                    enable_vad=bool(funasr_enable_vad),
                                     enable_punc=bool(funasr_enable_punc),
                                     duration_s=region_dur_s,
                                 )
@@ -272,7 +270,6 @@ def transcribe_to_subtitles(
                 device=resolved_device,
                 language=lang,
                 use_itn=bool(funasr_use_itn),
-                enable_vad=bool(funasr_enable_vad),
                 enable_punc=bool(funasr_enable_punc),
                 duration_s=duration_s,
             )
@@ -326,7 +323,6 @@ def transcribe_to_subtitles(
                                     device=resolved_device,
                                     language=lang,
                                     use_itn=bool(funasr_use_itn),
-                                    enable_vad=bool(funasr_enable_vad),
                                     enable_punc=bool(funasr_enable_punc),
                                     duration_s=region_dur_s,
                                 )

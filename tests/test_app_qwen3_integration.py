@@ -54,7 +54,6 @@ def test_app_run_asr_passes_qwen3_options(monkeypatch):
         "cpu",
         "auto",
         True,
-        False,
         True,
         "srt",
         "en",

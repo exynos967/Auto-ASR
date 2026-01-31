@@ -22,12 +22,10 @@ class FunASRConfig:
     device: str
     language: str
     use_itn: bool
-    # Whether to enable FunASR built-in VAD/punc if supported by the model.
-    enable_vad: bool = True
     enable_punc: bool = True
 
 
-_MODEL_CACHE: dict[tuple[str, str, bool, bool], Any] = {}
+_MODEL_CACHE: dict[tuple[str, str, bool], Any] = {}
 
 
 def _needs_trust_remote_code(model: str) -> bool:
@@ -133,12 +131,9 @@ def _make_model(cfg: FunASRConfig) -> Any:
     different knobs.
     """
 
-    enable_vad = bool(cfg.enable_vad) and (not is_funasr_nano(cfg.model))
     enable_punc = bool(cfg.enable_punc)
-    if bool(cfg.enable_vad) and not enable_vad:
-        logger.info("FunASR-Nano: 内置 VAD 暂不兼容，已自动关闭 funasr_enable_vad")
 
-    key = (cfg.model, cfg.device, enable_vad, enable_punc)
+    key = (cfg.model, cfg.device, enable_punc)
     if key in _MODEL_CACHE:
         return _MODEL_CACHE[key]
 
@@ -166,9 +161,6 @@ def _make_model(cfg: FunASRConfig) -> Any:
         )
 
     # Try to enable built-in VAD / punctuation when requested. These are common in FunASR.
-    if enable_vad:
-        model_kwargs["vad_model"] = "fsmn-vad"
-        model_kwargs["vad_kwargs"] = {"max_single_segment_time": 60000}
     if enable_punc:
         model_kwargs["punc_model"] = "ct-punc"
 
@@ -196,7 +188,7 @@ def _make_model(cfg: FunASRConfig) -> Any:
                 last_exc = e2
             else:
                 _MODEL_CACHE[key] = model
-                logger.info("FunASR 模型已加载: model=%s, device=%s, vad=%s, punc=%s", *key)
+                logger.info("FunASR 模型已加载: model=%s, device=%s, punc=%s", *key)
                 return model
 
         # Retry 2: try remote_code candidates (best-effort).
@@ -210,12 +202,12 @@ def _make_model(cfg: FunASRConfig) -> Any:
                 last_exc = e3
                 continue
             _MODEL_CACHE[key] = model
-            logger.info("FunASR 模型已加载: model=%s, device=%s, vad=%s, punc=%s", *key)
+            logger.info("FunASR 模型已加载: model=%s, device=%s, punc=%s", *key)
             return model
 
         raise last_exc from None
     _MODEL_CACHE[key] = model
-    logger.info("FunASR 模型已加载: model=%s, device=%s, vad=%s, punc=%s", *key)
+    logger.info("FunASR 模型已加载: model=%s, device=%s, punc=%s", *key)
     return model
 
 
@@ -576,7 +568,6 @@ def transcribe_file_funasr(
     device: str,
     language: str,
     use_itn: bool,
-    enable_vad: bool,
     enable_punc: bool,
     duration_s: float,
 ) -> ASRResult:
@@ -585,15 +576,12 @@ def transcribe_file_funasr(
         device=(device or "").strip(),
         language=(language or "").strip() or "auto",
         use_itn=bool(use_itn),
-        enable_vad=bool(enable_vad),
         enable_punc=bool(enable_punc),
     )
     if not cfg.model:
         raise RuntimeError("请先选择 FunASR 本地模型。")
 
     model_obj = _make_model(cfg)
-
-    use_builtin_vad = bool(cfg.enable_vad) and (not is_funasr_nano(cfg.model))
 
     gen_kwargs: dict[str, Any] = {
         "input": file_path,
@@ -603,9 +591,6 @@ def transcribe_file_funasr(
         # Sensible defaults for long audio; ignored if the model doesn't accept them.
         "batch_size_s": 60,
     }
-    if use_builtin_vad:
-        gen_kwargs["merge_vad"] = True
-        gen_kwargs["merge_length_s"] = 15
     if is_funasr_nano(cfg.model):
         # Fun-ASR-Nano (LLM-based) currently does not support batch decoding. Force single-item
         # batches to avoid `NotImplementedError: batch decoding is not implemented`.
@@ -615,30 +600,7 @@ def transcribe_file_funasr(
     try:
         res = model_obj.generate(**_filter_kwargs(model_obj.generate, gen_kwargs))
     except Exception as e:
-        # Some FunASR models may fail in `inference_with_vad` when timestamps are represented as
-        # dicts instead of lists (e.g. KeyError: 0). Retry once without built-in VAD.
-        if use_builtin_vad and isinstance(e, KeyError):
-            logger.warning(
-                "FunASR 内置 VAD 推理失败(KeyError=%s)，将自动关闭 funasr_enable_vad 并重试一次。",
-                e,
-            )
-            cfg2 = FunASRConfig(
-                model=cfg.model,
-                device=cfg.device,
-                language=cfg.language,
-                use_itn=cfg.use_itn,
-                enable_vad=False,
-                enable_punc=cfg.enable_punc,
-            )
-            model_obj = _make_model(cfg2)
-            gen_kwargs.pop("merge_vad", None)
-            gen_kwargs.pop("merge_length_s", None)
-            try:
-                res = model_obj.generate(**_filter_kwargs(model_obj.generate, gen_kwargs))
-            except Exception as e2:
-                raise RuntimeError(f"FunASR 推理失败({type(e2).__name__}): {e2}") from e2
-        else:
-            raise RuntimeError(f"FunASR 推理失败({type(e).__name__}): {e}") from e
+        raise RuntimeError(f"FunASR 推理失败({type(e).__name__}): {e}") from e
 
     text, segments = _extract_segments_from_result(res, duration_s=duration_s)
     return ASRResult(text=text, segments=segments)
@@ -648,7 +610,6 @@ def preload_funasr_model(
     *,
     model: str,
     device: str,
-    enable_vad: bool = True,
     enable_punc: bool = True,
 ) -> None:
     """
@@ -659,7 +620,6 @@ def preload_funasr_model(
         device=(device or "").strip(),
         language="auto",
         use_itn=True,
-        enable_vad=bool(enable_vad),
         enable_punc=bool(enable_punc),
     )
     if not cfg.model:
@@ -670,7 +630,6 @@ def preload_funasr_model(
 def download_funasr_model(
     *,
     model: str,
-    enable_vad: bool = True,
     enable_punc: bool = True,
 ) -> None:
     """
@@ -688,10 +647,9 @@ def download_funasr_model(
 
     local_dir = resolve_model_dir(model)
     logger.info(
-        "FunASR 模型已下载到项目目录: model=%s, dir=%s, vad=%s, punc=%s",
+        "FunASR 模型已下载到项目目录: model=%s, dir=%s, punc=%s",
         model,
         local_dir,
-        bool(enable_vad),
         bool(enable_punc),
     )
 

@@ -120,7 +120,6 @@ if DEFAULT_FUNASR_DEVICE not in {"auto", "cpu", "cuda:0"}:
     DEFAULT_FUNASR_DEVICE = "auto"
 DEFAULT_FUNASR_LANGUAGE = _str(_SAVED_CONFIG.get("funasr_language", "auto")).strip() or "auto"
 DEFAULT_FUNASR_USE_ITN = bool(_SAVED_CONFIG.get("funasr_use_itn", True))
-DEFAULT_FUNASR_ENABLE_VAD = bool(_SAVED_CONFIG.get("funasr_enable_vad", False))
 DEFAULT_FUNASR_ENABLE_PUNC = bool(_SAVED_CONFIG.get("funasr_enable_punc", True))
 
 DEFAULT_QWEN3_MODEL = _str(_SAVED_CONFIG.get("qwen3_model", "Qwen/Qwen3-ASR-1.7B")).strip()
@@ -276,7 +275,6 @@ def _resolve_qwen3_device_ui(device: str) -> str:
 def load_funasr_model_ui(
     funasr_model: str,
     funasr_device: str,
-    funasr_enable_vad: bool,
     funasr_enable_punc: bool,
 ) -> str:
     resolved_device = _resolve_funasr_device_ui(funasr_device)
@@ -284,7 +282,6 @@ def load_funasr_model_ui(
         preload_funasr_model(
             model=(funasr_model or "").strip(),
             device=resolved_device,
-            enable_vad=bool(funasr_enable_vad),
             enable_punc=bool(funasr_enable_punc),
         )
     except Exception as e:
@@ -296,13 +293,11 @@ def load_funasr_model_ui(
 
 def download_funasr_model_ui(
     funasr_model: str,
-    funasr_enable_vad: bool,
     funasr_enable_punc: bool,
 ) -> str:
     try:
         download_funasr_model(
             model=(funasr_model or "").strip(),
-            enable_vad=bool(funasr_enable_vad),
             enable_punc=bool(funasr_enable_punc),
         )
     except Exception as e:
@@ -424,7 +419,6 @@ def _auto_save_settings(
     funasr_device: str,
     funasr_language: str,
     funasr_use_itn: bool,
-    funasr_enable_vad: bool,
     funasr_enable_punc: bool,
     qwen3_model: str,
     qwen3_device: str,
@@ -454,7 +448,6 @@ def _auto_save_settings(
         "enable_vad": bool(enable_vad),
         "funasr_device": (funasr_device or "").strip() or "auto",
         "funasr_enable_punc": bool(funasr_enable_punc),
-        "funasr_enable_vad": bool(funasr_enable_vad),
         "funasr_language": (funasr_language or "").strip() or "auto",
         "funasr_model": (funasr_model or "").strip() or "iic/SenseVoiceSmall",
         "funasr_use_itn": bool(funasr_use_itn),
@@ -494,7 +487,6 @@ def run_asr(
     funasr_device: str,
     funasr_language: str,
     funasr_use_itn: bool,
-    funasr_enable_vad: bool,
     funasr_enable_punc: bool,
     output_format: str,
     language: str,
@@ -558,7 +550,6 @@ def run_asr(
         funasr_device=funasr_device,
         funasr_language=funasr_language,
         funasr_use_itn=funasr_use_itn,
-        funasr_enable_vad=funasr_enable_vad,
         funasr_enable_punc=funasr_enable_punc,
         qwen3_model=qwen3_model,
         qwen3_device=qwen3_device,
@@ -599,7 +590,6 @@ def run_asr(
             funasr_device=(funasr_device or "").strip() or DEFAULT_FUNASR_DEVICE,
             funasr_language=(funasr_language or "").strip() or DEFAULT_FUNASR_LANGUAGE,
             funasr_use_itn=bool(funasr_use_itn),
-            funasr_enable_vad=bool(funasr_enable_vad),
             funasr_enable_punc=bool(funasr_enable_punc),
             qwen3_model=resolved_qwen3_model,
             qwen3_device=(qwen3_device or "").strip() or DEFAULT_QWEN3_DEVICE,
@@ -1068,15 +1058,10 @@ with gr.Blocks(
                     value=DEFAULT_FUNASR_USE_ITN,
                     label="启用 ITN（数字/符号归一化）",
                 )
-                with gr.Row():
-                    funasr_enable_vad = gr.Checkbox(
-                        value=DEFAULT_FUNASR_ENABLE_VAD,
-                        label="启用内置 VAD",
-                    )
-                    funasr_enable_punc = gr.Checkbox(
-                        value=DEFAULT_FUNASR_ENABLE_PUNC,
-                        label="启用标点恢复（推荐）",
-                    )
+                funasr_enable_punc = gr.Checkbox(
+                    value=DEFAULT_FUNASR_ENABLE_PUNC,
+                    label="启用标点恢复（推荐）",
+                )
 
         with gr.Tab("切分与字幕轴", id="tab_vad"):
             with gr.Accordion("长音频切分", open=True):
@@ -1175,13 +1160,13 @@ with gr.Blocks(
 
     download_model_btn.click(
         fn=download_funasr_model_ui,
-        inputs=[funasr_model, funasr_enable_vad, funasr_enable_punc],
+        inputs=[funasr_model, funasr_enable_punc],
         outputs=[download_model_status],
     )
 
     load_model_btn.click(
         fn=load_funasr_model_ui,
-        inputs=[funasr_model, funasr_device, funasr_enable_vad, funasr_enable_punc],
+        inputs=[funasr_model, funasr_device, funasr_enable_punc],
         outputs=[load_model_status],
     )
 
@@ -1464,7 +1449,6 @@ with gr.Blocks(
             funasr_device,
             funasr_language,
             funasr_use_itn,
-            funasr_enable_vad,
             funasr_enable_punc,
             output_format,
             language,
