@@ -1,9 +1,6 @@
-# auto-asr (Gradio + OpenAI / FunASR / Qwen3-ASR)
+# auto-asr (Gradio + OpenAI / FunASR / Transformers)
 
-Upload/record audio in a Gradio UI, transcribe via OpenAI API or local FunASR/Qwen3-ASR, and download subtitles as `srt` / `vtt` / `txt`.
-
-Long-audio splitting logic is adapted from Qwen3-ASR-Toolkit (MIT License).
-See `THIRD_PARTY_NOTICES.md`.
+Upload/record audio in a Gradio UI, transcribe via OpenAI API or local FunASR/Transformers, and download subtitles as `srt` / `vtt` / `txt`.
 
 ## Setup
 
