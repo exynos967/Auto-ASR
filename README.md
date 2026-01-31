@@ -1,4 +1,4 @@
-# Auto-ASR（Gradio 网页界面 + 多后端 ASR + 字幕处理）
+# Auto-ASR（Gradio + 多后端 ASR + 字幕处理）
 
 一个基于 Gradio的ASR工具：上传/录制音频后进行转写，并导出字幕文件。支持多个转写后端，并提供一套可配置的字幕 LLM 处理流程（校正/翻译/智能断句）。
 
@@ -23,7 +23,7 @@
 uv sync
 ```
 
-2) 启动网页界面（WebUI）
+2) 启动WebUI
 
 ```bash
 uv run python app.py
