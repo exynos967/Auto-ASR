@@ -1,6 +1,6 @@
-# auto-asr（Gradio 网页界面 + 多后端 ASR + 字幕处理）
+# Auto-ASR（Gradio 网页界面 + 多后端 ASR + 字幕处理）
 
-一个本地网页界面（基于 Gradio）的工具：上传/录制音频后进行转写，并导出字幕文件（`srt` / `vtt` / `txt`）。支持多个转写后端，并提供一套可配置的字幕 LLM 处理流程（校正/翻译/智能断句）。
+一个基于 Gradio的ASR工具：上传/录制音频后进行转写，并导出字幕文件。支持多个转写后端，并提供一套可配置的字幕 LLM 处理流程（校正/翻译/智能断句）。
 
 ## 功能一览
 
@@ -9,20 +9,17 @@
   - FunASR（本地）
   - Transformers 后端（本地；当前默认用于 Qwen3-ASR）
 - 长音频切分与字幕轴
-  - 统一使用 **Silero VAD** 做切分/语音段时间轴（不依赖 FunASR 内置 VAD、也不依赖强制对齐模型）
+  - 统一使用 **Silero VAD** 做切分/语音段时间轴
 - 字幕处理（LLM）
-  - 字幕校正（LLM）
-  - 字幕翻译（LLM）
-  - 智能断句（LLM，可选“直接换行”或“拆成多条字幕并重分配时间轴”）
-- 资源管理
-  - 网页界面提供“释放显存”按钮（清理本进程的模型缓存与 torch 的 CUDA 缓存）
+  - 字幕校正
+  - 字幕翻译
+  - 智能断句
 
 ## 快速开始
 
 1) 安装依赖
 
 ```bash
-cd /root/workdir/auto-asr
 uv sync
 ```
 
@@ -43,7 +40,7 @@ uv run python app.py
 
 ### Qwen3-ASR（Transformers 本地推理）
 
-安装（体积较大）：
+安装：
 
 ```bash
 uv sync --extra transformers
@@ -60,7 +57,7 @@ uv sync --extra transformers
 
 ### FunASR（本地推理）
 
-安装（体积较大）：
+安装：
 
 ```bash
 uv sync --extra funasr
@@ -71,10 +68,6 @@ uv sync --extra funasr
 - SenseVoiceSmall：`https://huggingface.co/iic/SenseVoiceSmall`
 - Fun-ASR-Nano-2512：`https://huggingface.co/FunAudioLLM/Fun-ASR-Nano-2512`
 
-常见报错：
-
-- `No module named 'tiktoken'`：执行 `uv sync --extra funasr` 或 `uv pip install tiktoken`
-
 ## 切分与字幕轴（Silero VAD）
 
 在网页界面「切分与字幕轴」里：
@@ -84,12 +77,7 @@ uv sync --extra funasr
   - `vad_speech`：优先按语音段输出字幕轴（推荐；对长音频更稳定）
   - `chunk`：按切分块输出字幕轴
 
-说明：
-
-- FunASR 内置 VAD 已移除；Qwen3-ASR 强制对齐模型已移除
-- 当前项目内所有“切分/字幕轴”统一走 Silero VAD
-
-## 字幕处理（LLM）
+## 字幕处理
 
 在网页界面「字幕处理」标签页：
 
@@ -120,14 +108,14 @@ uv sync --extra funasr -p 3.11
 ```
 
 - CUDA 加速（本地推理）：
-  - 可按你的 CUDA 版本安装对应的 PyTorch 轮子，例如（CUDA 12.8）：
+  - 可按你的 CUDA 版本安装对应的 PyTorch，例如（CUDA 12.8）：
 
 ```bash
 uv pip install --upgrade --torch-backend cu128 torch torchaudio
 ```
 
 - ffmpeg：
-  - 项目使用 `imageio-ffmpeg` 提供 ffmpeg（二进制无需系统安装）
+  - 项目使用 `imageio-ffmpeg` 提供 ffmpeg
 
 ## Gradio 主题
 
