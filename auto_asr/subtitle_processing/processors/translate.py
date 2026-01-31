@@ -39,11 +39,14 @@ def _validate_llm_response(
     if not isinstance(response_obj, dict):
         return (
             False,
-            f"Output must be a dict, got {type(response_obj).__name__}. Use format: {{'0': 'text', '1': 'text'}}",
+            (
+                f"Output must be a dict, got {type(response_obj).__name__}. "
+                "Use format: {'0': 'text', '1': 'text'}"
+            ),
         )
 
-    expected_keys = set(subtitle_dict.keys())
-    actual_keys = set(str(k) for k in response_obj.keys())
+    expected_keys = set(subtitle_dict)
+    actual_keys = {str(k) for k in response_obj}
 
     def _sort_keys(keys: set[str]) -> list[str]:
         return sorted(keys, key=lambda x: int(x) if x.isdigit() else x)
@@ -68,13 +71,19 @@ def _validate_llm_response(
             if not isinstance(value, dict):
                 return (
                     False,
-                    f"Key '{key}': value must be a dict with 'native_translation' field. Got {type(value).__name__}.",
+                    (
+                        f"Key '{key}': value must be a dict with 'native_translation' field. "
+                        f"Got {type(value).__name__}."
+                    ),
                 )
             if "native_translation" not in value:
                 available_keys = list(value.keys())
                 return (
                     False,
-                    f"Key '{key}': missing 'native_translation' field. Found keys: {available_keys}. Must include 'native_translation'.",
+                    (
+                        f"Key '{key}': missing 'native_translation' field. Found keys: "
+                        f"{available_keys}. Must include 'native_translation'."
+                    ),
                 )
 
     return True, ""
@@ -121,7 +130,8 @@ def _agent_loop(
                 "role": "user",
                 "content": (
                     f"Error: {error_message}\n\n"
-                    f"Fix the errors above and output ONLY a valid JSON dictionary with ALL {len(subtitle_dict)} keys"
+                    "Fix the errors above and output ONLY a valid JSON dictionary "
+                    f"with ALL {len(subtitle_dict)} keys"
                 ),
             }
         )

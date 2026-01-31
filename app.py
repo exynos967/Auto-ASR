@@ -124,12 +124,7 @@ DEFAULT_FUNASR_ENABLE_VAD = bool(_SAVED_CONFIG.get("funasr_enable_vad", False))
 DEFAULT_FUNASR_ENABLE_PUNC = bool(_SAVED_CONFIG.get("funasr_enable_punc", True))
 
 DEFAULT_QWEN3_MODEL = _str(_SAVED_CONFIG.get("qwen3_model", "Qwen/Qwen3-ASR-1.7B")).strip()
-DEFAULT_QWEN3_FORCED_ALIGNER = _str(
-    _SAVED_CONFIG.get("qwen3_forced_aligner", "Qwen/Qwen3-ForcedAligner-0.6B")
-).strip()
 QWEN3_ASR_HF_URL = "https://huggingface.co/Qwen/Qwen3-ASR-1.7B"
-QWEN3_FORCED_ALIGNER_HF_URL = "https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B"
-DEFAULT_QWEN3_USE_FORCED_ALIGNER = bool(_SAVED_CONFIG.get("qwen3_use_forced_aligner", True))
 DEFAULT_QWEN3_DEVICE = _str(_SAVED_CONFIG.get("qwen3_device", "auto")).strip() or "auto"
 if DEFAULT_QWEN3_DEVICE not in {"auto", "cpu", "cuda:0"}:
     DEFAULT_QWEN3_DEVICE = "auto"
@@ -319,56 +314,36 @@ def download_funasr_model_ui(
 
 def load_qwen3_model_ui(
     qwen3_model: str,
-    qwen3_forced_aligner: str,
     qwen3_device: str,
     qwen3_max_inference_batch_size: int,
-    qwen3_use_forced_aligner: bool,
 ) -> str:
     resolved_device = _resolve_qwen3_device_ui(qwen3_device)
-    use_forced_aligner = bool(qwen3_use_forced_aligner)
     try:
         preload_qwen3_model(
             cfg=Qwen3ASRConfig(
                 model=(qwen3_model or "").strip() or "Qwen/Qwen3-ASR-1.7B",
-                forced_aligner=(
-                    (qwen3_forced_aligner or "").strip() or "Qwen/Qwen3-ForcedAligner-0.6B"
-                )
-                if use_forced_aligner
-                else "",
                 device=resolved_device,
                 max_inference_batch_size=max(1, int(qwen3_max_inference_batch_size)),
             )
         )
     except Exception as e:
         logger.exception(
-            "加载 Qwen3-ASR 模型失败: model=%s, aligner=%s, device=%s",
+            "加载 Qwen3-ASR 模型失败: model=%s, device=%s",
             qwen3_model,
-            qwen3_forced_aligner,
             resolved_device,
         )
         return f"加载失败：{e}"
 
     model_name = (qwen3_model or "").strip()
-    aligner_name = (qwen3_forced_aligner or "").strip()
-    if use_forced_aligner:
-        return f"已加载 Qwen3-ASR 模型：{model_name} + {aligner_name}（device={resolved_device}）"
-    return f"已加载 Qwen3-ASR 模型：{model_name}（未启用 Forced Aligner；device={resolved_device}）"
+    return f"已加载 Qwen3-ASR 模型：{model_name}（device={resolved_device}）"
 
 
 def download_qwen3_models_ui(
     qwen3_model: str,
-    qwen3_forced_aligner: str,
-    qwen3_use_forced_aligner: bool,
 ) -> str:
     try:
-        use_forced_aligner = bool(qwen3_use_forced_aligner)
         download_qwen3_models(
             model=(qwen3_model or "").strip() or "Qwen/Qwen3-ASR-1.7B",
-            forced_aligner=(
-                (qwen3_forced_aligner or "").strip() or "Qwen/Qwen3-ForcedAligner-0.6B"
-            )
-            if use_forced_aligner
-            else "",
         )
     except Exception as e:
         logger.exception("下载 Qwen3-ASR 模型失败: model=%s", qwen3_model)
@@ -452,10 +427,8 @@ def _auto_save_settings(
     funasr_enable_vad: bool,
     funasr_enable_punc: bool,
     qwen3_model: str,
-    qwen3_forced_aligner: str,
     qwen3_device: str,
     qwen3_max_inference_batch_size: int,
-    qwen3_use_forced_aligner: bool,
     output_format: str,
     language: str,
     enable_vad: bool,
@@ -491,11 +464,8 @@ def _auto_save_settings(
         "openai_base_url": (openai_base_url or "").strip(),
         "output_format": (output_format or "").strip() or "srt",
         "qwen3_device": (qwen3_device or "").strip() or "auto",
-        "qwen3_forced_aligner": (qwen3_forced_aligner or "").strip()
-        or "Qwen/Qwen3-ForcedAligner-0.6B",
         "qwen3_max_inference_batch_size": int(qwen3_max_inference_batch_size),
         "qwen3_model": (qwen3_model or "").strip() or "Qwen/Qwen3-ASR-1.7B",
-        "qwen3_use_forced_aligner": bool(qwen3_use_forced_aligner),
         "timeline_strategy": (timeline_strategy or "").strip() or "vad_speech",
         "upload_audio_format": (upload_audio_format or "").strip() or "wav",
         "upload_mp3_bitrate_kbps": int(UPLOAD_MP3_BITRATE_KBPS),
@@ -542,10 +512,8 @@ def run_asr(
     upload_audio_format: str,
     api_concurrency: int,
     qwen3_model: str,
-    qwen3_forced_aligner: str,
     qwen3_device: str,
     qwen3_max_inference_batch_size: int,
-    qwen3_use_forced_aligner: bool,
 ):
     if not audio_path:
         raise gr.Error("请先上传或录制一段音频。")
@@ -593,10 +561,8 @@ def run_asr(
         funasr_enable_vad=funasr_enable_vad,
         funasr_enable_punc=funasr_enable_punc,
         qwen3_model=qwen3_model,
-        qwen3_forced_aligner=qwen3_forced_aligner,
         qwen3_device=qwen3_device,
         qwen3_max_inference_batch_size=qwen3_max_inference_batch_size,
-        qwen3_use_forced_aligner=bool(qwen3_use_forced_aligner),
         output_format=output_format,
         language=language,
         enable_vad=enable_vad,
@@ -619,11 +585,7 @@ def run_asr(
     try:
         resolved_funasr_model = (funasr_model or "").strip() or DEFAULT_FUNASR_MODEL
         resolved_qwen3_model = (qwen3_model or "").strip() or DEFAULT_QWEN3_MODEL
-        resolved_qwen3_forced_aligner = (
-            (qwen3_forced_aligner or "").strip() or DEFAULT_QWEN3_FORCED_ALIGNER
-        )
         resolved_qwen3_max_batch = _clamp_int(int(qwen3_max_inference_batch_size), 1, 64)
-        resolved_qwen3_use_forced_aligner = bool(qwen3_use_forced_aligner)
         result = transcribe_to_subtitles(
             input_audio_path=audio_path,
             asr_backend=asr_backend,
@@ -640,10 +602,8 @@ def run_asr(
             funasr_enable_vad=bool(funasr_enable_vad),
             funasr_enable_punc=bool(funasr_enable_punc),
             qwen3_model=resolved_qwen3_model,
-            qwen3_forced_aligner=resolved_qwen3_forced_aligner,
             qwen3_device=(qwen3_device or "").strip() or DEFAULT_QWEN3_DEVICE,
             qwen3_max_inference_batch_size=resolved_qwen3_max_batch,
-            qwen3_use_forced_aligner=resolved_qwen3_use_forced_aligner,
             enable_vad=enable_vad,
             vad_segment_threshold_s=int(vad_segment_threshold_s),
             vad_max_segment_threshold_s=int(vad_max_segment_threshold_s),
@@ -1031,28 +991,13 @@ with gr.Blocks(
             with gr.Accordion("Qwen3-ASR 本地推理", open=False):
                 gr.Markdown("首次使用需安装：`uv sync --extra transformers`")
                 gr.Markdown(f"模型下载目录（项目内）：`{get_models_dir()}`")
+                gr.Markdown("字幕轴：统一使用 Silero VAD 语音段时间轴（无需 ForcedAligner）。")
                 qwen3_model = gr.Dropdown(
                     choices=[
                         ("Qwen3-ASR-1.7B（Qwen/Qwen3-ASR-1.7B）", "Qwen/Qwen3-ASR-1.7B"),
                     ],
                     value=DEFAULT_QWEN3_MODEL,
                     label="ASR 模型（HuggingFace RepoID）",
-                    allow_custom_value=True,
-                )
-                qwen3_use_forced_aligner = gr.Checkbox(
-                    value=DEFAULT_QWEN3_USE_FORCED_ALIGNER,
-                    label="输出字幕轴（使用 Forced Aligner）",
-                    info="开启：输出 SRT/VTT 时用 Forced Aligner 生成更细的时间轴；关闭：不加载/不调用 Forced Aligner，仅按切分段落生成粗略时间轴。",
-                )
-                qwen3_forced_aligner = gr.Dropdown(
-                    choices=[
-                        (
-                            "ForcedAligner-0.6B（Qwen/Qwen3-ForcedAligner-0.6B）",
-                            "Qwen/Qwen3-ForcedAligner-0.6B",
-                        ),
-                    ],
-                    value=DEFAULT_QWEN3_FORCED_ALIGNER,
-                    label="Forced Aligner（用于字幕轴，可选）",
                     allow_custom_value=True,
                 )
                 with gr.Row():
@@ -1242,7 +1187,7 @@ with gr.Blocks(
 
     download_qwen3_btn.click(
         fn=download_qwen3_models_ui,
-        inputs=[qwen3_model, qwen3_forced_aligner, qwen3_use_forced_aligner],
+        inputs=[qwen3_model],
         outputs=[download_qwen3_status],
     )
 
@@ -1250,10 +1195,8 @@ with gr.Blocks(
         fn=load_qwen3_model_ui,
         inputs=[
             qwen3_model,
-            qwen3_forced_aligner,
             qwen3_device,
             qwen3_max_inference_batch_size,
-            qwen3_use_forced_aligner,
         ],
         outputs=[load_qwen3_status],
     )
@@ -1539,10 +1482,8 @@ with gr.Blocks(
             upload_audio_format,
             api_concurrency,
             qwen3_model,
-            qwen3_forced_aligner,
             qwen3_device,
             qwen3_max_inference_batch_size,
-            qwen3_use_forced_aligner,
         ],
         outputs=[preview, full_text, out_file, debug],
         concurrency_limit=1,

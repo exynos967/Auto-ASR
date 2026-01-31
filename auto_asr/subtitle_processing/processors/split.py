@@ -5,17 +5,20 @@ import math
 import re
 from concurrent.futures import ThreadPoolExecutor
 
-from auto_asr.subtitle_processing.prompts import get_prompt
 from auto_asr.subtitle_processing.base import (
     ProcessorContext,
     SubtitleProcessor,
     register_processor,
 )
+from auto_asr.subtitle_processing.prompts import get_prompt
 from auto_asr.subtitles import SubtitleLine
 
 # ==================== VideoCaptioner-compatible validation ====================
 
-_NO_SPACE_LANGUAGES = r"[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af\u0e00-\u0eff\u1000-\u109f\u1780-\u17ff\u0900-\u0dff]"
+_NO_SPACE_LANGUAGES = (
+    r"[\u4e00-\u9fff\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af"
+    r"\u0e00-\u0eff\u1000-\u109f\u1780-\u17ff\u0900-\u0dff]"
+)
 
 
 def _is_mainly_cjk(text: str, threshold: float = 0.5) -> bool:
@@ -80,7 +83,8 @@ def _validate_split_result(
     if violations:
         error_msg = "Length violations:\n" + "\n".join(f"- {v}" for v in violations)
         error_msg += (
-            "\n\nSplit these long segments further with <br>, then output the COMPLETE text with ALL segments (not just the fixed ones)."
+            "\n\nSplit these long segments further with <br>, then output the COMPLETE text "
+            "with ALL segments (not just the fixed ones)."
         )
         return False, error_msg
 
@@ -113,8 +117,6 @@ def _split_with_agent_loop(
         {"role": "user", "content": user_prompt},
     ]
 
-    last_result: list[str] | None = None
-
     for _step in range(MAX_STEPS):
         result_text = str(ctx.chat_text(messages=messages, temperature=0.1) or "")
         result_text_cleaned = re.sub(r"\n+", "", result_text)
@@ -123,8 +125,6 @@ def _split_with_agent_loop(
             for segment in result_text_cleaned.split(delimiter)
             if segment.strip()
         ]
-
-        last_result = split_result if split_result else [text]
 
         ok, error_message = _validate_split_result(
             original_text=text,

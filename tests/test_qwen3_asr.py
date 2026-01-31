@@ -16,33 +16,22 @@ def test_resolve_qwen3_language_maps_common_codes():
 
 
 def test_transcribe_chunks_qwen3_builds_segments_from_time_stamps(monkeypatch):
-    from auto_asr.openai_asr import ASRSegment
     from auto_asr.qwen3_asr import Qwen3ASRConfig, transcribe_chunks_qwen3
-
-    @dataclass
-    class TS:
-        text: str
-        start_time: float
-        end_time: float
 
     @dataclass
     class R:
         language: str
         text: str
-        time_stamps: list[TS] | None
+        time_stamps: object | None = None
 
     class FakeModel:
         def transcribe(self, *, audio, language, return_time_stamps):
-            assert return_time_stamps is True
+            # Qwen3-ASR timeline is derived from Silero VAD in our pipeline; we never
+            # request forced-aligned timestamps from the model.
+            assert return_time_stamps is False
             assert isinstance(audio, list) and len(audio) == 1
             assert language == ["English"]
-            return [
-                R(
-                    language="en",
-                    text="hello world",
-                    time_stamps=[TS("hello", 0.0, 0.5), TS("world", 0.5, 1.0)],
-                )
-            ]
+            return [R(language="en", text="hello world")]
 
     def fake_make_model(_cfg):
         return FakeModel()
@@ -52,22 +41,17 @@ def test_transcribe_chunks_qwen3_builds_segments_from_time_stamps(monkeypatch):
     wav = np.zeros(16000, dtype=np.float32)
     cfg = Qwen3ASRConfig(
         model="Qwen/Qwen3-ASR-1.7B",
-        forced_aligner="Qwen/Qwen3-ForcedAligner-0.6B",
         device="cpu",
     )
     out = transcribe_chunks_qwen3(
         chunks=[wav],
         cfg=cfg,
         language="en",
-        return_time_stamps=True,
         sample_rate=16000,
     )
     assert len(out) == 1
     assert out[0].text == "hello world"
-    assert out[0].segments == [
-        ASRSegment(start_s=0.0, end_s=0.5, text="hello"),
-        ASRSegment(start_s=0.5, end_s=1.0, text="world"),
-    ]
+    assert out[0].segments == []
 
 
 def test_preload_qwen3_model_can_disable_forced_aligner(monkeypatch):
@@ -90,7 +74,6 @@ def test_preload_qwen3_model_can_disable_forced_aligner(monkeypatch):
     qwen3_asr.preload_qwen3_model(
         qwen3_asr.Qwen3ASRConfig(
             model="Qwen/Qwen3-ASR-1.7B",
-            forced_aligner="",
             device="cpu",
             max_inference_batch_size=1,
         )

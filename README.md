@@ -24,12 +24,9 @@ uv sync --extra transformers
 Qwen3-ASR 本地模型（HuggingFace）：
 
 - Qwen3-ASR-1.7B: `https://huggingface.co/Qwen/Qwen3-ASR-1.7B`
-- Qwen3-ForcedAligner-0.6B: `https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B`
 
-WebUI 使用时需要同时配置 ASR 模型和 Forced Aligner（用于生成时间戳）；在「引擎配置 -> Qwen3-ASR」点击「下载模型/加载模型」即可。
-若在「引擎配置 -> Qwen3-ASR」勾选「输出字幕轴（使用 Forced Aligner）」，输出 `srt/vtt` 时会优先使用模型返回的时间戳（更细）。
-未勾选时不会加载/调用 Forced Aligner，`srt/vtt` 会按切分段落生成**较粗的时间轴**。
-为兼容 Forced Aligner 的时长限制（以及避免长音频推理显存压力），长音频会被自动切分（单段最多约 300s）。
+WebUI 使用时在「引擎配置 -> Qwen3-ASR」点击「下载模型/加载模型」即可。
+输出 `srt/vtt` 时字幕轴统一使用 Silero VAD 的语音段时间轴（无需 Forced Aligner）；长音频会自动切分以避免显存压力（单段最多约 300s，且受 VAD 配置影响）。
 
 如需使用「FunASR（本地推理）」：
 

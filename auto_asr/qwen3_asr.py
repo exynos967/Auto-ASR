@@ -8,7 +8,7 @@ from typing import Any
 import numpy as np
 
 from auto_asr.model_hub import configure_model_cache_env, snapshot_download
-from auto_asr.openai_asr import ASRResult, ASRSegment
+from auto_asr.openai_asr import ASRResult
 
 logger = logging.getLogger(__name__)
 
@@ -16,13 +16,12 @@ logger = logging.getLogger(__name__)
 @dataclass(frozen=True)
 class Qwen3ASRConfig:
     model: str
-    forced_aligner: str
     device: str = "auto"
     max_inference_batch_size: int = 8
     max_new_tokens: int = 1024
 
 
-_MODEL_CACHE: dict[tuple[str, str, str, int, int], Any] = {}
+_MODEL_CACHE: dict[tuple[str, str, int, int], Any] = {}
 
 
 def resolve_qwen3_language(language: str | None) -> str | None:
@@ -92,20 +91,16 @@ def _resolve_dtype(device: str):
     return torch.float32
 
 
-def download_qwen3_models(*, model: str, forced_aligner: str = "") -> tuple[str, str]:
-    """Download Qwen3-ASR model (and optional forced aligner) to the project ./models cache."""
+def download_qwen3_models(*, model: str) -> str:
+    """Download Qwen3-ASR model to the project ./models cache."""
     configure_model_cache_env()
     asr_dir = snapshot_download(model)
-    fa_dir = ""
-    if (forced_aligner or "").strip():
-        fa_dir = str(snapshot_download(forced_aligner))
-    return str(asr_dir), fa_dir
+    return str(asr_dir)
 
 
 def _make_model(cfg: Qwen3ASRConfig) -> Any:
     key = (
         cfg.model,
-        cfg.forced_aligner,
         _resolve_device(cfg.device),
         int(cfg.max_inference_batch_size),
         int(cfg.max_new_tokens),
@@ -116,15 +111,14 @@ def _make_model(cfg: Qwen3ASRConfig) -> Any:
 
     configure_model_cache_env()
 
-    device_map = key[2]
+    device_map = key[1]
     dtype = _resolve_dtype(device_map)
 
     Qwen3ASRModel = _import_qwen_asr()
 
     logger.info(
-        "加载 Qwen3-ASR 模型: model=%s, forced_aligner=%s, device=%s, dtype=%s",
+        "加载 Qwen3-ASR 模型: model=%s, device=%s, dtype=%s",
         cfg.model,
-        cfg.forced_aligner or "(disabled)",
         device_map,
         getattr(dtype, "__name__", str(dtype)),
     )
@@ -135,9 +129,6 @@ def _make_model(cfg: Qwen3ASRConfig) -> Any:
         "max_inference_batch_size": int(cfg.max_inference_batch_size),
         "max_new_tokens": int(cfg.max_new_tokens),
     }
-    if (cfg.forced_aligner or "").strip():
-        kwargs["forced_aligner"] = cfg.forced_aligner
-        kwargs["forced_aligner_kwargs"] = dict(dtype=dtype, device_map=device_map)
 
     model = Qwen3ASRModel.from_pretrained(cfg.model, **kwargs)
 
@@ -173,7 +164,6 @@ def transcribe_chunks_qwen3(
     chunks: list[np.ndarray],
     cfg: Qwen3ASRConfig,
     language: str | None,
-    return_time_stamps: bool,
     sample_rate: int,
 ) -> list[ASRResult]:
     """Transcribe audio chunks with Qwen3-ASR (transformers backend)."""
@@ -186,28 +176,15 @@ def transcribe_chunks_qwen3(
     results = model.transcribe(
         audio=audio_inputs,
         language=lang_list,
-        return_time_stamps=bool(return_time_stamps),
+        # Forced aligner is intentionally not used; subtitle timeline should
+        # come from Silero VAD segmentation in our pipeline.
+        return_time_stamps=False,
     )
 
     out: list[ASRResult] = []
     for r in results:
         text = str(getattr(r, "text", "") or "").strip()
-        segs: list[ASRSegment] = []
-        if return_time_stamps:
-            ts_list = getattr(r, "time_stamps", None)
-            if ts_list:
-                for ts in ts_list:
-                    seg_text = str(getattr(ts, "text", "") or "").strip()
-                    if not seg_text:
-                        continue
-                    segs.append(
-                        ASRSegment(
-                            start_s=float(getattr(ts, "start_time", 0.0) or 0.0),
-                            end_s=float(getattr(ts, "end_time", 0.0) or 0.0),
-                            text=seg_text,
-                        )
-                    )
-        out.append(ASRResult(text=text, segments=segs))
+        out.append(ASRResult(text=text, segments=[]))
     return out
 
 

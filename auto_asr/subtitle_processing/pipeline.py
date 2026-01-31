@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 import time
 from collections.abc import Callable
@@ -105,10 +106,8 @@ def _make_openai_chat_fn(*, api_key: str, base_url: str | None):
                 code = _status_code(e)
                 if code in {401, 403}:
                     err = RuntimeError(f"LLM 提供商鉴权失败（HTTP {code}）。")
-                    try:
-                        setattr(err, "status_code", int(code))
-                    except Exception:
-                        pass
+                    with contextlib.suppress(Exception):
+                        err.status_code = int(code)  # type: ignore[attr-defined]
                     raise err from e
                 if code == 429:
                     with backoff_lock:
@@ -145,7 +144,9 @@ def _make_openai_chat_text(
         msgs = messages
         if msgs is None:
             if system_prompt is None or user_prompt is None:
-                raise TypeError("chat_text requires either messages=... or system_prompt+user_prompt")
+                raise TypeError(
+                    "chat_text requires either messages=... or system_prompt+user_prompt"
+                )
             msgs = [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},

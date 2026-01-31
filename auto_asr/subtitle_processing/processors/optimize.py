@@ -200,7 +200,9 @@ class OptimizeProcessor(SubtitleProcessor):
         results: dict[str, str] = {}
 
         def run_batch(payload: dict[str, str]) -> dict[str, str]:
-            return _agent_loop_optimize(ctx=ctx, subtitle_chunk=payload, custom_prompt=custom_prompt)
+            return _agent_loop_optimize(
+                ctx=ctx, subtitle_chunk=payload, custom_prompt=custom_prompt
+            )
 
         with ThreadPoolExecutor(max_workers=concurrency) as ex:
             futs = [ex.submit(run_batch, b) for b in batches]

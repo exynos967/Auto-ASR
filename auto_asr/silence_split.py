@@ -26,11 +26,11 @@ def _get_rms(
     y = np.pad(y, padding, mode=pad_mode)
 
     axis = -1
-    out_strides = y.strides + (y.strides[axis],)
+    out_strides = (*y.strides, y.strides[axis])
 
     x_shape_trimmed = list(y.shape)
     x_shape_trimmed[axis] -= frame_length - 1
-    out_shape = tuple(x_shape_trimmed) + (frame_length,)
+    out_shape = (*tuple(x_shape_trimmed), frame_length)
     xw = np.lib.stride_tricks.as_strided(y, shape=out_shape, strides=out_strides)
 
     target_axis = axis - 1 if axis < 0 else axis + 1
@@ -73,12 +73,11 @@ class SilenceSlicer:
         self.max_sil_kept_frames = round(sr * max_sil_kept_ms / 1000.0 / self.hop_size)
 
     def slice(self, waveform: np.ndarray) -> list[tuple[int, int]]:
-        if waveform.ndim > 1:
-            samples = waveform.mean(axis=0)
-        else:
-            samples = waveform
+        samples = waveform.mean(axis=0) if waveform.ndim > 1 else waveform
 
-        rms_list = _get_rms(y=samples, frame_length=self.win_size, hop_length=self.hop_size).squeeze(0)
+        rms_list = _get_rms(
+            y=samples, frame_length=self.win_size, hop_length=self.hop_size
+        ).squeeze(0)
         total_frames = int(rms_list.shape[0])
 
         sil_tags: list[tuple[int, int]] = []
@@ -96,7 +95,8 @@ class SilenceSlicer:
 
             is_leading_silence = silence_start == 0 and i > self.max_sil_kept_frames
             need_slice_middle = (
-                i - silence_start >= self.min_interval_frames and i - clip_start >= self.min_length_frames
+                i - silence_start >= self.min_interval_frames
+                and i - clip_start >= self.min_length_frames
             )
             if not is_leading_silence and not need_slice_middle:
                 silence_start = None
@@ -107,10 +107,20 @@ class SilenceSlicer:
                 sil_tags.append((0, pos) if silence_start == 0 else (pos, pos))
                 clip_start = pos
             elif i - silence_start <= self.max_sil_kept_frames * 2:
-                pos = int(rms_list[i - self.max_sil_kept_frames : silence_start + self.max_sil_kept_frames + 1].argmin())
+                window = rms_list[
+                    i
+                    - self.max_sil_kept_frames : silence_start
+                    + self.max_sil_kept_frames
+                    + 1
+                ]
+                pos = int(window.argmin())
                 pos += i - self.max_sil_kept_frames
-                pos_l = int(rms_list[silence_start : silence_start + self.max_sil_kept_frames + 1].argmin()) + silence_start
-                pos_r = int(rms_list[i - self.max_sil_kept_frames : i + 1].argmin()) + i - self.max_sil_kept_frames
+                left_window = rms_list[
+                    silence_start : silence_start + self.max_sil_kept_frames + 1
+                ]
+                right_window = rms_list[i - self.max_sil_kept_frames : i + 1]
+                pos_l = int(left_window.argmin()) + silence_start
+                pos_r = int(right_window.argmin()) + i - self.max_sil_kept_frames
                 if silence_start == 0:
                     sil_tags.append((0, pos_r))
                     clip_start = pos_r
@@ -118,8 +128,12 @@ class SilenceSlicer:
                     sil_tags.append((min(pos_l, pos), max(pos_r, pos)))
                     clip_start = max(pos_r, pos)
             else:
-                pos_l = int(rms_list[silence_start : silence_start + self.max_sil_kept_frames + 1].argmin()) + silence_start
-                pos_r = int(rms_list[i - self.max_sil_kept_frames : i + 1].argmin()) + i - self.max_sil_kept_frames
+                left_window = rms_list[
+                    silence_start : silence_start + self.max_sil_kept_frames + 1
+                ]
+                right_window = rms_list[i - self.max_sil_kept_frames : i + 1]
+                pos_l = int(left_window.argmin()) + silence_start
+                pos_r = int(right_window.argmin()) + i - self.max_sil_kept_frames
                 sil_tags.append((0, pos_r) if silence_start == 0 else (pos_l, pos_r))
                 clip_start = pos_r
 
@@ -144,7 +158,12 @@ class SilenceSlicer:
                 )
             )
         if sil_tags[-1][1] < total_frames:
-            segments.append((int(sil_tags[-1][1] * self.hop_size), int(total_frames * self.hop_size)))
+            segments.append(
+                (
+                    int(sil_tags[-1][1] * self.hop_size),
+                    int(total_frames * self.hop_size),
+                )
+            )
 
         max_sample = int(samples.shape[0])
         out: list[tuple[int, int]] = []
@@ -219,7 +238,9 @@ def load_and_split_silence(
     chunks: list[AudioChunk] = []
     for start, end in segments:
         if end - start <= max_segment_samples:
-            chunks.append(AudioChunk(start_sample=start, end_sample=end, wav=wav[start:end]))
+            chunks.append(
+                AudioChunk(start_sample=start, end_sample=end, wav=wav[start:end])
+            )
             continue
         chunks.extend(
             _split_by_max_len(
@@ -236,4 +257,3 @@ def load_and_split_silence(
     used_split = len(chunks) > 1
     logger.info("静音切分完成: chunks=%d", len(chunks))
     return chunks, used_split
-

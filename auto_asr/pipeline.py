@@ -11,12 +11,13 @@ from threading import Event
 from threading import local as thread_local
 from typing import Any
 
+import numpy as np
+
 from auto_asr.audio_tools import load_audio, process_vad_speech, transcode_wav_to_mp3
 from auto_asr.funasr_asr import release_funasr_resources, transcribe_file_funasr
 from auto_asr.funasr_models import is_funasr_nano
 from auto_asr.openai_asr import make_openai_client, transcribe_file_verbose
 from auto_asr.qwen3_asr import Qwen3ASRConfig, release_qwen3_resources, transcribe_chunks_qwen3
-from auto_asr.silence_split import load_and_split_silence
 from auto_asr.subtitles import SubtitleLine, compose_srt, compose_txt, compose_vtt
 from auto_asr.vad_split import (
     WAV_SAMPLE_RATE,
@@ -85,10 +86,8 @@ def transcribe_to_subtitles(
     funasr_enable_punc: bool = True,
     # Qwen3-ASR local inference (Transformers backend via qwen-asr)
     qwen3_model: str = "Qwen/Qwen3-ASR-1.7B",
-    qwen3_forced_aligner: str = "Qwen/Qwen3-ForcedAligner-0.6B",
     qwen3_device: str = "auto",
     qwen3_max_inference_batch_size: int = 8,
-    qwen3_use_forced_aligner: bool = True,
     enable_vad: bool = True,
     vad_segment_threshold_s: int = 120,
     vad_max_segment_threshold_s: int = 180,
@@ -421,41 +420,53 @@ def transcribe_to_subtitles(
 
     if asr_backend == "qwen3asr":
         try:
-            return_time_stamps = (
-                output_format in {"srt", "vtt"} and bool(qwen3_use_forced_aligner)
-            )
+            # Qwen3-ASR: unify chunking + subtitle timeline to Silero VAD speech regions.
+            #
+            # We intentionally do NOT use a forced aligner. Timestamps come from VAD regions,
+            # which is more stable and also avoids a second large model.
+            max_chunk_s = min(int(vad_max_segment_threshold_s), 300)
+            max_chunk_samples = int(max_chunk_s) * WAV_SAMPLE_RATE
 
-            # Forced aligner supports up to ~5 minutes. For long audio, we chunk audio to keep each
-            # chunk within a safe window. For qwen3asr we prefer silence-based chunking (GPT-SoVITS
-            # style) instead of Silero VAD (more stable + easier to reason about).
-            max_align_chunk_s = 300
-            max_chunk_s = min(int(vad_max_segment_threshold_s), max_align_chunk_s)
+            _check_cancel(cancel_event)
+            wav = load_audio(input_audio_path)
 
-            chunks, used_split = load_and_split_silence(
-                file_path=input_audio_path,
-                max_segment_s=max_chunk_s,
-                # Best-effort: reuse existing "VAD" UI knobs for silence slicer behavior.
-                min_interval_ms=int(vad_min_silence_duration_ms),
-                max_sil_kept_ms=int(vad_speech_pad_ms),
-            )
+            regions: list[tuple[int, int, np.ndarray]] = []
+            used_vad = False
+            vad_model = get_vad_model()
+            if vad_model is not None:
+                try:
+                    regions = process_vad_speech(
+                        wav,
+                        vad_model,
+                        max_utterance_s=min(int(vad_speech_max_utterance_s), max_chunk_s),
+                        merge_gap_ms=int(vad_speech_merge_gap_ms),
+                        vad_threshold=float(vad_threshold),
+                        vad_min_speech_duration_ms=int(vad_min_speech_duration_ms),
+                        vad_min_silence_duration_ms=int(vad_min_silence_duration_ms),
+                        vad_speech_pad_ms=int(vad_speech_pad_ms),
+                    )
+                    used_vad = bool(regions)
+                except Exception as e:  # pragma: no cover
+                    logger.info("Qwen3-ASR VAD 语音段切分失败，降级为固定分段: %s", e)
+
+            if not regions:
+                # Fallback: fixed chunking. (Avoids whole-audio inference OOM.)
+                for start in range(0, len(wav), max_chunk_samples):
+                    end = min(start + max_chunk_samples, len(wav))
+                    if end > start:
+                        regions.append((start, end, wav[start:end]))
 
             cfg = Qwen3ASRConfig(
                 model=(qwen3_model or "").strip() or "Qwen/Qwen3-ASR-1.7B",
-                forced_aligner=(
-                    (qwen3_forced_aligner or "").strip() or "Qwen/Qwen3-ForcedAligner-0.6B"
-                )
-                if return_time_stamps
-                else "",
                 device=(qwen3_device or "").strip() or "auto",
                 max_inference_batch_size=max(1, int(qwen3_max_inference_batch_size)),
             )
 
-            wavs = [c.wav for c in chunks]
+            wavs = [w for (_s, _e, w) in regions]
             results = transcribe_chunks_qwen3(
                 chunks=wavs,
                 cfg=cfg,
                 language=language or None,
-                return_time_stamps=return_time_stamps,
                 sample_rate=WAV_SAMPLE_RATE,
             )
 
@@ -463,26 +474,16 @@ def transcribe_to_subtitles(
             full_text_parts: list[str] = []
             total_segments = 0
 
-            for idx, chunk in enumerate(chunks):
+            for idx, (start_sample, end_sample, _chunk_wav) in enumerate(regions):
                 _check_cancel(cancel_event)
                 asr = results[idx]
                 full_text_parts.append((asr.text or "").strip())
 
-                if output_format in {"srt", "vtt"} and asr.segments:
-                    for seg in asr.segments:
-                        subtitle_lines.append(
-                            SubtitleLine(
-                                start_s=chunk.start_s + seg.start_s,
-                                end_s=chunk.start_s + seg.end_s,
-                                text=seg.text,
-                            )
-                        )
-                    total_segments += len(asr.segments)
-                elif output_format in {"srt", "vtt"}:
+                if output_format in {"srt", "vtt"}:
                     subtitle_lines.append(
                         SubtitleLine(
-                            start_s=chunk.start_s,
-                            end_s=chunk.end_s,
+                            start_s=float(start_sample) / float(WAV_SAMPLE_RATE),
+                            end_s=float(end_sample) / float(WAV_SAMPLE_RATE),
                             text=asr.text,
                         )
                     )
@@ -507,14 +508,14 @@ def transcribe_to_subtitles(
 
             preview = subtitle_text[:5000]
             debug = (
-                f"backend=qwen3asr, model={cfg.model}, forced_aligner={cfg.forced_aligner}, "
-                f"device={cfg.device}, chunks={len(chunks)}, segments={total_segments}, "
-                f"split=silence(used={used_split}), max_chunk_s={max_chunk_s}"
+                f"backend=qwen3asr, model={cfg.model}, device={cfg.device}, "
+                f"chunks={len(regions)}, segments={total_segments}, "
+                f"timeline=vad_speech(used={used_vad}), max_chunk_s={max_chunk_s}"
             )
             logger.info(
                 "转写完成(qwen3asr): out=%s, chunks=%d, segments=%d",
                 out_path,
-                len(chunks),
+                len(regions),
                 total_segments,
             )
             return PipelineResult(
