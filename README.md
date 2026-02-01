@@ -53,7 +53,6 @@ uv sync --extra transformers
 使用方式：
 
 - 在网页界面「引擎配置 -> Qwen3-ASR 本地推理」里点击「下载模型 / 加载模型」
-- 输出 `srt/vtt` 时，字幕轴统一来自 Silero VAD 的语音段时间轴（无需强制对齐模型）
 
 ### FunASR（本地推理）
 
