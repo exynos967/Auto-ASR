@@ -32,6 +32,7 @@ from auto_asr.subtitle_processing.settings import (
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+    force=True,
 )
 logger = logging.getLogger(__name__)
 
