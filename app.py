@@ -12,7 +12,7 @@ from auto_asr.funasr_asr import (
     preload_funasr_model,
     release_funasr_resources,
 )
-from auto_asr.model_hub import get_models_dir
+from auto_asr.model_hub import get_models_dir, set_hf_endpoint
 from auto_asr.pipeline import transcribe_to_subtitles
 from auto_asr.qwen3_asr import (
     Qwen3ASRConfig,
@@ -52,6 +52,13 @@ def _int(v: object | None, default: int) -> int:
 
 def _clamp_int(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, v))
+
+
+DEFAULT_HF_ENDPOINT = (
+    _str(_SAVED_CONFIG.get("hf_endpoint", "huggingface.co")).strip() or "huggingface.co"
+)
+# Apply at import time so subsequent model downloads (including in pipelines) use the same endpoint.
+set_hf_endpoint(DEFAULT_HF_ENDPOINT)
 
 
 DEFAULT_OPENAI_API_KEY = _str(_SAVED_CONFIG.get("openai_api_key")).strip()
@@ -308,12 +315,14 @@ def download_funasr_model_ui(
 
 
 def prepare_funasr_model_ui(
+    hf_endpoint: str,
     funasr_model: str,
     funasr_device: str,
     funasr_enable_punc: bool,
 ) -> str:
     """One-click: download (if needed) + load FunASR model into memory."""
 
+    set_hf_endpoint((hf_endpoint or "").strip() or DEFAULT_HF_ENDPOINT)
     model_name = (funasr_model or "").strip()
     resolved_device = _resolve_funasr_device_ui(funasr_device)
     try:
@@ -375,12 +384,14 @@ def download_qwen3_models_ui(
 
 
 def prepare_qwen3_model_ui(
+    hf_endpoint: str,
     qwen3_model: str,
     qwen3_device: str,
     qwen3_max_inference_batch_size: int,
 ) -> str:
     """One-click: download (if needed) + load Qwen3-ASR model into memory."""
 
+    set_hf_endpoint((hf_endpoint or "").strip() or DEFAULT_HF_ENDPOINT)
     resolved_device = _resolve_qwen3_device_ui(qwen3_device)
     model_id = (qwen3_model or "").strip() or "Qwen/Qwen3-ASR-1.7B"
     try:
@@ -411,6 +422,17 @@ def release_cuda_ui() -> str:
         logger.exception("释放显存失败")
         return f"释放失败：{e}"
     return "已释放 FunASR/Qwen3 模型缓存/显存（如仍显示占用，通常是 PyTorch 缓存行为）。"
+
+
+def _save_hf_endpoint_ui(hf_endpoint: str):
+    value = (hf_endpoint or "").strip() or "huggingface.co"
+    try:
+        set_hf_endpoint(value)
+        update_config({"hf_endpoint": value})
+    except Exception as e:
+        logger.exception("保存 HuggingFace 下载源失败: %s", e)
+        return f"保存 HuggingFace 下载源失败：{e}"
+    return None
 
 
 def _save_subtitle_provider_settings_ui(
@@ -493,6 +515,7 @@ def _auto_save_settings(
     vad_speech_merge_gap_ms: int,
     upload_audio_format: str,
     api_concurrency: int,
+    hf_endpoint: str,
 ) -> None:
     api_key = (openai_api_key or "").strip()
     if not api_key:
@@ -527,6 +550,7 @@ def _auto_save_settings(
         "vad_max_segment_threshold_s": int(vad_max_segment_threshold_s),
         "vad_segment_threshold_s": int(vad_segment_threshold_s),
         "api_concurrency": int(api_concurrency),
+        "hf_endpoint": (hf_endpoint or "").strip() or DEFAULT_HF_ENDPOINT,
     }
 
     path = update_config(config)
@@ -562,12 +586,16 @@ def run_asr(
     qwen3_model: str,
     qwen3_device: str,
     qwen3_max_inference_batch_size: int,
+    hf_endpoint: str = DEFAULT_HF_ENDPOINT,
 ):
     if not audio_path:
         raise gr.Error("请先上传或录制一段音频。")
     asr_backend = (asr_backend or "").strip() or "openai"
     if asr_backend == "openai" and not (openai_api_key or "").strip():
         raise gr.Error("请先填写 OpenAI API Key。")
+
+    hf_endpoint = (hf_endpoint or "").strip() or DEFAULT_HF_ENDPOINT
+    set_hf_endpoint(hf_endpoint)
 
     lang = None if language == "auto" else language
     prompt = (prompt or "").strip() or None
@@ -624,6 +652,7 @@ def run_asr(
         vad_speech_merge_gap_ms=vad_speech_merge_gap_ms,
         upload_audio_format=upload_audio_format,
         api_concurrency=api_concurrency,
+        hf_endpoint=hf_endpoint,
     )
 
     cancel_event = Event()
@@ -1038,6 +1067,16 @@ with gr.Blocks(
                 gr.Markdown("首次使用需安装：`uv sync --extra transformers`")
                 gr.Markdown(f"模型下载目录（项目内）：`{get_models_dir()}`")
                 gr.Markdown("字幕轴：统一使用 Silero VAD 语音段时间轴（无需强制对齐模型）。")
+                hf_endpoint_state = gr.State()
+                hf_endpoint = gr.Dropdown(
+                    choices=[
+                        ("huggingface.co（官方）", "huggingface.co"),
+                        ("hf-mirror.com（国内镜像）", "hf-mirror.com"),
+                    ],
+                    value=DEFAULT_HF_ENDPOINT,
+                    label="HuggingFace 下载源（可选镜像加速）",
+                    allow_custom_value=True,
+                )
                 qwen3_model = gr.Dropdown(
                     choices=[
                         ("Qwen3-ASR-1.7B（Qwen/Qwen3-ASR-1.7B）", "Qwen/Qwen3-ASR-1.7B"),
@@ -1210,17 +1249,24 @@ with gr.Blocks(
 
     prepare_funasr_btn.click(
         fn=prepare_funasr_model_ui,
-        inputs=[funasr_model, funasr_device, funasr_enable_punc],
+        inputs=[hf_endpoint, funasr_model, funasr_device, funasr_enable_punc],
         outputs=[prepare_funasr_status],
     )
 
     prepare_qwen3_btn.click(
         fn=prepare_qwen3_model_ui,
-        inputs=[qwen3_model, qwen3_device, qwen3_max_inference_batch_size],
+        inputs=[hf_endpoint, qwen3_model, qwen3_device, qwen3_max_inference_batch_size],
         outputs=[prepare_qwen3_status],
     )
     release_cuda_btn.click(
         fn=release_cuda_ui, inputs=[], outputs=[release_cuda_status], queue=False
+    )
+
+    hf_endpoint.change(
+        fn=_save_hf_endpoint_ui,
+        inputs=[hf_endpoint],
+        outputs=[hf_endpoint_state],
+        queue=False,
     )
 
     subtitle_provider.change(
@@ -1502,6 +1548,7 @@ with gr.Blocks(
             qwen3_model,
             qwen3_device,
             qwen3_max_inference_batch_size,
+            hf_endpoint,
         ],
         outputs=[preview, full_text, out_file, debug],
         concurrency_limit=1,
