@@ -52,7 +52,7 @@ uv sync --extra transformers
 
 使用方式：
 
-- 在网页界面「引擎配置 -> Qwen3-ASR 本地推理」里点击「下载模型 / 加载模型」
+- 在网页界面「引擎配置 -> Qwen3-ASR 本地推理」里点击「准备模型（下载并加载）」
 
 ### FunASR（本地推理）注:效果不如Qwen-ASR
 
@@ -66,6 +66,10 @@ uv sync --extra funasr
 
 - SenseVoiceSmall：`https://huggingface.co/iic/SenseVoiceSmall`
 - Fun-ASR-Nano-2512：`https://huggingface.co/FunAudioLLM/Fun-ASR-Nano-2512`
+
+使用方式：
+
+- 在网页界面「引擎配置 -> FunASR 本地推理」里点击「准备模型（下载并加载）」
 
 ## 切分与字幕轴（Silero VAD）
 

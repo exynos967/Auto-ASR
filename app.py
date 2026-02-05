@@ -307,6 +307,33 @@ def download_funasr_model_ui(
     return f"下载完成：模型文件已下载到项目目录 `{get_models_dir()}`。"
 
 
+def prepare_funasr_model_ui(
+    funasr_model: str,
+    funasr_device: str,
+    funasr_enable_punc: bool,
+) -> str:
+    """One-click: download (if needed) + load FunASR model into memory."""
+
+    model_name = (funasr_model or "").strip()
+    resolved_device = _resolve_funasr_device_ui(funasr_device)
+    try:
+        # Download first so the UI can show a deterministic "project-local models" message.
+        download_funasr_model(model=model_name, enable_punc=bool(funasr_enable_punc))
+        preload_funasr_model(
+            model=model_name,
+            device=resolved_device,
+            enable_punc=bool(funasr_enable_punc),
+        )
+    except Exception as e:
+        logger.exception("准备 FunASR 模型失败: model=%s, device=%s", model_name, resolved_device)
+        return f"准备失败：{e}"
+
+    return (
+        f"已准备 FunASR 模型：{model_name}（device={resolved_device}）\n\n"
+        f"模型目录：`{get_models_dir()}`"
+    )
+
+
 def load_qwen3_model_ui(
     qwen3_model: str,
     qwen3_device: str,
@@ -345,6 +372,35 @@ def download_qwen3_models_ui(
         return f"下载失败：{e}"
 
     return f"下载完成：模型文件已下载到项目目录 `{get_models_dir()}`。"
+
+
+def prepare_qwen3_model_ui(
+    qwen3_model: str,
+    qwen3_device: str,
+    qwen3_max_inference_batch_size: int,
+) -> str:
+    """One-click: download (if needed) + load Qwen3-ASR model into memory."""
+
+    resolved_device = _resolve_qwen3_device_ui(qwen3_device)
+    model_id = (qwen3_model or "").strip() or "Qwen/Qwen3-ASR-1.7B"
+    try:
+        local_dir = download_qwen3_models(model=model_id)
+        preload_qwen3_model(
+            cfg=Qwen3ASRConfig(
+                # Always load from local dir to avoid triggering a second download path.
+                model=str(local_dir),
+                device=resolved_device,
+                max_inference_batch_size=max(1, int(qwen3_max_inference_batch_size)),
+            )
+        )
+    except Exception as e:
+        logger.exception("准备 Qwen3-ASR 模型失败: model=%s, device=%s", model_id, resolved_device)
+        return f"准备失败：{e}"
+
+    return (
+        f"已准备 Qwen3-ASR 模型：{model_id}（device={resolved_device}）\n\n"
+        f"本地目录：`{local_dir}`"
+    )
 
 
 def release_cuda_ui() -> str:
@@ -981,7 +1037,7 @@ with gr.Blocks(
             with gr.Accordion("Qwen3-ASR 本地推理", open=False):
                 gr.Markdown("首次使用需安装：`uv sync --extra transformers`")
                 gr.Markdown(f"模型下载目录（项目内）：`{get_models_dir()}`")
-                gr.Markdown("字幕轴：统一使用 Silero VAD 语音段时间轴（无需 ForcedAligner）。")
+                gr.Markdown("字幕轴：统一使用 Silero VAD 语音段时间轴（无需强制对齐模型）。")
                 qwen3_model = gr.Dropdown(
                     choices=[
                         ("Qwen3-ASR-1.7B（Qwen/Qwen3-ASR-1.7B）", "Qwen/Qwen3-ASR-1.7B"),
@@ -990,11 +1046,8 @@ with gr.Blocks(
                     label="ASR 模型（HuggingFace RepoID）",
                     allow_custom_value=True,
                 )
-                with gr.Row():
-                    download_qwen3_btn = gr.Button("下载模型", variant="secondary")
-                    load_qwen3_btn = gr.Button("加载模型", variant="primary")
-                download_qwen3_status = gr.Markdown()
-                load_qwen3_status = gr.Markdown()
+                prepare_qwen3_btn = gr.Button("准备模型（下载并加载）", variant="primary")
+                prepare_qwen3_status = gr.Markdown()
                 qwen3_device = gr.Dropdown(
                     choices=[
                         ("自动", "auto"),
@@ -1027,11 +1080,8 @@ with gr.Blocks(
                     label="模型（HuggingFace RepoID）",
                     allow_custom_value=True,
                 )
-                with gr.Row():
-                    download_model_btn = gr.Button("下载模型", variant="secondary")
-                    load_model_btn = gr.Button("加载模型", variant="primary")
-                download_model_status = gr.Markdown()
-                load_model_status = gr.Markdown()
+                prepare_funasr_btn = gr.Button("准备模型（下载并加载）", variant="primary")
+                prepare_funasr_status = gr.Markdown()
                 funasr_device = gr.Dropdown(
                     choices=[
                         ("自动", "auto"),
@@ -1158,32 +1208,16 @@ with gr.Blocks(
                     label="并发请求数",
                 )
 
-    download_model_btn.click(
-        fn=download_funasr_model_ui,
-        inputs=[funasr_model, funasr_enable_punc],
-        outputs=[download_model_status],
-    )
-
-    load_model_btn.click(
-        fn=load_funasr_model_ui,
+    prepare_funasr_btn.click(
+        fn=prepare_funasr_model_ui,
         inputs=[funasr_model, funasr_device, funasr_enable_punc],
-        outputs=[load_model_status],
+        outputs=[prepare_funasr_status],
     )
 
-    download_qwen3_btn.click(
-        fn=download_qwen3_models_ui,
-        inputs=[qwen3_model],
-        outputs=[download_qwen3_status],
-    )
-
-    load_qwen3_btn.click(
-        fn=load_qwen3_model_ui,
-        inputs=[
-            qwen3_model,
-            qwen3_device,
-            qwen3_max_inference_batch_size,
-        ],
-        outputs=[load_qwen3_status],
+    prepare_qwen3_btn.click(
+        fn=prepare_qwen3_model_ui,
+        inputs=[qwen3_model, qwen3_device, qwen3_max_inference_batch_size],
+        outputs=[prepare_qwen3_status],
     )
     release_cuda_btn.click(
         fn=release_cuda_ui, inputs=[], outputs=[release_cuda_status], queue=False

@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from gc import collect as gc_collect
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -22,6 +23,31 @@ class Qwen3ASRConfig:
 
 
 _MODEL_CACHE: dict[tuple[str, str, int, int], Any] = {}
+_MODEL_DIR_CACHE: dict[str, str] = {}
+
+
+def resolve_qwen3_model_dir(model: str) -> str:
+    """Resolve Qwen3-ASR model input to a local directory (download if a RepoID is provided)."""
+
+    model = (model or "").strip()
+    if not model:
+        return model
+
+    # Ensure caches are project-local before any downstream libs initialize.
+    configure_model_cache_env()
+
+    p = Path(model)
+    if p.exists():
+        return str(p)
+
+    cached = _MODEL_DIR_CACHE.get(model)
+    if cached:
+        return cached
+
+    local_dir = snapshot_download(model)
+    _MODEL_DIR_CACHE[model] = str(local_dir)
+    logger.info("Qwen3-ASR 模型下载目录(项目内): model=%s, dir=%s", model, local_dir)
+    return str(local_dir)
 
 
 def resolve_qwen3_language(language: str | None) -> str | None:
@@ -93,14 +119,13 @@ def _resolve_dtype(device: str):
 
 def download_qwen3_models(*, model: str) -> str:
     """Download Qwen3-ASR model to the project ./models cache."""
-    configure_model_cache_env()
-    asr_dir = snapshot_download(model)
-    return str(asr_dir)
+    return resolve_qwen3_model_dir(model)
 
 
 def _make_model(cfg: Qwen3ASRConfig) -> Any:
+    model_dir_or_id = resolve_qwen3_model_dir(cfg.model)
     key = (
-        cfg.model,
+        model_dir_or_id,
         _resolve_device(cfg.device),
         int(cfg.max_inference_batch_size),
         int(cfg.max_new_tokens),
@@ -109,8 +134,6 @@ def _make_model(cfg: Qwen3ASRConfig) -> Any:
     if cached is not None:
         return cached
 
-    configure_model_cache_env()
-
     device_map = key[1]
     dtype = _resolve_dtype(device_map)
 
@@ -118,7 +141,7 @@ def _make_model(cfg: Qwen3ASRConfig) -> Any:
 
     logger.info(
         "加载 Qwen3-ASR 模型: model=%s, device=%s, dtype=%s",
-        cfg.model,
+        model_dir_or_id,
         device_map,
         getattr(dtype, "__name__", str(dtype)),
     )
@@ -130,7 +153,7 @@ def _make_model(cfg: Qwen3ASRConfig) -> Any:
         "max_new_tokens": int(cfg.max_new_tokens),
     }
 
-    model = Qwen3ASRModel.from_pretrained(cfg.model, **kwargs)
+    model = Qwen3ASRModel.from_pretrained(model_dir_or_id, **kwargs)
 
     _MODEL_CACHE[key] = model
     return model
